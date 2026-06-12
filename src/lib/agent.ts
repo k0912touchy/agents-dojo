@@ -64,12 +64,12 @@ export function calcParamGrowth(
 }
 
 export function saveAgent(agent: Agent) {
-  sessionStorage.setItem('dojo_agent', JSON.stringify(agent))
+  localStorage.setItem('dojo_agent', JSON.stringify(agent))
 }
 
 export function loadAgent(): Agent | null {
   try {
-    const raw = sessionStorage.getItem('dojo_agent')
+    const raw = localStorage.getItem('dojo_agent')
     return raw ? JSON.parse(raw) : null
   } catch {
     return null

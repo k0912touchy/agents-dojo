@@ -14,7 +14,7 @@ export default function BirthPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const type = sessionStorage.getItem('dojo_agent_type') as AgentType | null
+    const type = localStorage.getItem('dojo_agent_type') as AgentType | null
     if (!type) { router.push('/'); return }
     setAgentType(type)
   }, [router])

@@ -39,15 +39,15 @@ export default function HomePage() {
         setStep(step + 1)
       } else {
         const agentType = judgeType(newAnswers)
-        sessionStorage.setItem('dojo_quiz_answers', JSON.stringify(newAnswers))
-        sessionStorage.setItem('dojo_agent_type', agentType)
+        localStorage.setItem('dojo_quiz_answers', JSON.stringify(newAnswers))
+        localStorage.setItem('dojo_agent_type', agentType)
         router.push('/birth')
       }
     }, 500)
   }
 
   function startNew() {
-    sessionStorage.removeItem('dojo_agent')
+    localStorage.removeItem('dojo_agent')
     setSavedAgent(null)
     setMode('intro')
   }
