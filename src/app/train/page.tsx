@@ -16,7 +16,10 @@ interface SkillProposal {
   skillName: string
   summary: string
   keyPoints: string[]
+  personaInsight: string | null
 }
+
+const SESSION_WRAP_THRESHOLD = 7 // user messages before suggesting wrap-up
 
 export default function TrainPage() {
   const router = useRouter()
@@ -28,16 +31,20 @@ export default function TrainPage() {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [tokenCount, setTokenCount] = useState(0)
+  const [userMsgCount, setUserMsgCount] = useState(0)
   const [skillProposal, setSkillProposal] = useState<SkillProposal | null>(null)
   const [skillName, setSkillName] = useState('')
   const [earnedSkill, setEarnedSkill] = useState<Skill | null>(null)
   const [prevParams, setPrevParams] = useState<Agent['params'] | null>(null)
+  const [newPersonaTrait, setNewPersonaTrait] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const agentRef = useRef<Agent | null>(null)
 
   useEffect(() => {
     const a = loadAgent()
     if (!a) { router.push('/'); return }
+    // migrate old agents without personaTraits
+    if (!a.personaTraits) a.personaTraits = []
     agentRef.current = a
     setAgent(a)
   }, [router])
@@ -55,8 +62,13 @@ export default function TrainPage() {
     if (!topic.trim() || !agentRef.current || !selectedCategory) return
     const a = agentRef.current
     const config = AGENT_TYPES[a.type]
-    const opening = `「${topic}」について教えてもらえるんですね。${config.emoji} ぜひ聞かせてください。まず、${a.type === '先読み型' ? 'この分野でどんな考え方をされているか' : a.type === '設計型' ? '全体の構造や枠組みから' : a.type === '突破型' ? '一番大事だと思うこと' : 'どんなことを大切にしているか'}教えてもらえますか？`
-    setMessages([{ role: 'assistant', content: opening }])
+    const openings: Record<string, string> = {
+      先読み型: `「${topic}」ですね。${config.emoji} まず全体像から教えてもらえますか？どんな構造・考え方を持っていますか？`,
+      設計型: `「${topic}」について教えてもらえるんですね。${config.emoji} ステップや順序でいうと、どこから話しますか？`,
+      突破型: `「${topic}」！${config.emoji} 早速聞かせてください。一番重要だと思うことから教えて！`,
+      共鳴型: `「${topic}」について教えてもらえるんですね。${config.emoji} どんなきっかけでこの知識を大切にするようになったか、教えてもらえますか？`,
+    }
+    setMessages([{ role: 'assistant', content: openings[a.type] ?? `「${topic}」について教えてください！` }])
     setPhase('chat')
   }
 
@@ -67,6 +79,7 @@ export default function TrainPage() {
     setMessages(history)
     setInput('')
     setStreaming(true)
+    setUserMsgCount((c) => c + 1)
 
     const a = agentRef.current
     let assistantContent = ''
@@ -137,7 +150,7 @@ export default function TrainPage() {
       setSkillName(proposal.skillName)
       setPhase('skill-confirm')
     } catch {
-      setSkillProposal({ skillName: topic, summary: `${selectedCategory.label}の知識`, keyPoints: [] })
+      setSkillProposal({ skillName: topic, summary: `${selectedCategory.label}の知識`, keyPoints: [], personaInsight: null })
       setSkillName(topic)
       setPhase('skill-confirm')
     }
@@ -155,7 +168,13 @@ export default function TrainPage() {
       earnedAt: a.totalTokens,
     }
 
-    const updated: Agent = { ...a, params: newParams, skills: [...a.skills, skill] }
+    const newTraits = [...(a.personaTraits ?? [])]
+    if (skillProposal.personaInsight && !newTraits.includes(skillProposal.personaInsight)) {
+      newTraits.push(skillProposal.personaInsight)
+      setNewPersonaTrait(skillProposal.personaInsight)
+    }
+
+    const updated: Agent = { ...a, params: newParams, skills: [...a.skills, skill], personaTraits: newTraits }
     agentRef.current = updated
     setAgent(updated)
     saveAgent(updated)
@@ -168,15 +187,16 @@ export default function TrainPage() {
     if (agentRef.current.totalTokens >= BIRTH_THRESHOLD) {
       setPhase('born')
     } else {
-      // reset for next session
       setPhase('category')
       setSelectedCategory(null)
       setTopic('')
       setMessages([])
       setTokenCount(0)
+      setUserMsgCount(0)
       setSkillProposal(null)
       setEarnedSkill(null)
       setPrevParams(null)
+      setNewPersonaTrait(null)
     }
   }
 
@@ -184,17 +204,18 @@ export default function TrainPage() {
   const config = AGENT_TYPES[agent.type]
   const progress = Math.min((agent.totalTokens / BIRTH_THRESHOLD) * 100, 100)
   const isBorn = agent.totalTokens >= BIRTH_THRESHOLD
+  const isNearingWrap = userMsgCount >= SESSION_WRAP_THRESHOLD
 
   return (
     <div className="min-h-screen flex flex-col max-w-lg mx-auto px-4 py-6">
 
-      {/* Header - always visible */}
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: config.bgColor }}>
           {config.emoji}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-2 flex-wrap">
             <span className="font-bold text-base">{agent.name}</span>
             <span className="text-xs" style={{ color: config.color }}>{agent.type}</span>
             {agent.skills.length > 0 && (
@@ -214,7 +235,7 @@ export default function TrainPage() {
         </div>
       </div>
 
-      {/* Phase: Category selection */}
+      {/* Category selection */}
       {phase === 'category' && (
         <div className="fade-in-up">
           <p className="text-sm font-bold mb-1">今日は何を教える？</p>
@@ -238,10 +259,10 @@ export default function TrainPage() {
         </div>
       )}
 
-      {/* Phase: Topic input */}
+      {/* Topic input */}
       {phase === 'topic' && selectedCategory && (
         <div className="fade-in-up flex flex-col flex-1">
-          <button onClick={() => setPhase('category')} className="flex items-center gap-1 text-xs mb-6" style={{ color: '#64748B' }}>
+          <button onClick={() => setPhase('category')} className="flex items-center gap-1 text-xs mb-6 w-fit" style={{ color: '#64748B' }}>
             ← 戻る
           </button>
           <div className="text-2xl mb-3">{selectedCategory.emoji}</div>
@@ -262,7 +283,7 @@ export default function TrainPage() {
           />
           {selectedCategory.id === 'thinking' && (
             <div className="rounded-xl px-4 py-3 mb-4 text-xs leading-relaxed" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)', color: '#94A3B8' }}>
-              💡 最近した意思決定・書いた文章・判断の基準など、あなたの思考の断片を貼ると、エージェントが思考パターンを抽出します
+              💡 意思決定の経緯・書いた文章・判断の基準など貼るとAIが思考パターンを抽出します
             </div>
           )}
           <button
@@ -276,17 +297,25 @@ export default function TrainPage() {
         </div>
       )}
 
-      {/* Phase: Chat */}
+      {/* Chat */}
       {phase === 'chat' && (
         <>
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-sm px-2 py-1 rounded" style={{ background: config.bgColor, color: config.color }}>
+            <span className="text-xs px-2 py-1 rounded" style={{ background: config.bgColor, color: config.color }}>
               {selectedCategory?.emoji} {selectedCategory?.label}
             </span>
-            <span className="text-sm" style={{ color: '#94A3B8' }}>{topic}</span>
+            <span className="text-xs truncate" style={{ color: '#94A3B8' }}>{topic}</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto flex flex-col gap-3 mb-4 min-h-0 max-h-[calc(100vh-320px)]">
+          {/* Wrap-up nudge */}
+          {isNearingWrap && !streaming && (
+            <div className="rounded-xl px-4 py-3 mb-3 text-xs" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.2)' }}>
+              <span style={{ color: '#FFC300' }}>✨ だいぶ話せたね！</span>
+              <span style={{ color: '#94A3B8' }}> スキルカードにまとめるタイミングかも</span>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto flex flex-col gap-3 mb-4 min-h-0 max-h-[calc(100vh-350px)]">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.role === 'assistant' && (
@@ -295,7 +324,7 @@ export default function TrainPage() {
                   </div>
                 )}
                 <div
-                  className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed"
+                  className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
                   style={{
                     background: m.role === 'user' ? 'rgba(255,195,0,0.15)' : 'rgba(255,255,255,0.06)',
                     borderBottomRightRadius: m.role === 'user' ? 4 : undefined,
@@ -334,16 +363,20 @@ export default function TrainPage() {
           {messages.length >= 4 && !streaming && (
             <button
               onClick={handleEndSession}
-              className="mt-3 w-full py-3 rounded-xl text-sm transition-all hover:opacity-80"
-              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
+              className="mt-3 w-full py-3 rounded-xl text-sm transition-all"
+              style={{
+                border: `1px solid ${isNearingWrap ? '#FFC300' : 'rgba(255,255,255,0.1)'}`,
+                color: isNearingWrap ? '#FFC300' : '#94A3B8',
+                background: isNearingWrap ? 'rgba(255,195,0,0.08)' : 'transparent',
+              }}
             >
-              スキルカードを作る ✨
+              ✨ スキルカードを作る
             </button>
           )}
         </>
       )}
 
-      {/* Phase: Generating */}
+      {/* Generating */}
       {phase === 'generating' && (
         <div className="flex-1 flex flex-col items-center justify-center text-center fade-in-up">
           <div className="text-4xl mb-4 animate-pulse">{config.emoji}</div>
@@ -352,38 +385,55 @@ export default function TrainPage() {
         </div>
       )}
 
-      {/* Phase: Skill confirm */}
+      {/* Skill confirm */}
       {phase === 'skill-confirm' && skillProposal && (
         <div className="flex-1 flex flex-col justify-center fade-in-up">
-          <p className="text-xs text-center tracking-widest mb-6" style={{ color: '#FFC300' }}>SKILL PROPOSAL</p>
+          <p className="text-xs text-center tracking-widest mb-4" style={{ color: '#FFC300' }}>SKILL PROPOSAL</p>
 
-          <div className="rounded-2xl p-5 mb-4" style={{ background: config.bgColor, border: `1px solid ${config.color}` }}>
-            <p className="text-xs mb-3" style={{ color: config.color }}>
-              {selectedCategory?.emoji} {selectedCategory?.label} / {topic}
-            </p>
-            <p className="text-xs mb-2" style={{ color: '#64748B' }}>{agent.name} が学んだこと：</p>
-            <ul className="text-sm space-y-1">
-              {skillProposal.keyPoints.map((pt, i) => (
-                <li key={i} style={{ color: '#D1D5DB' }}>・{pt}</li>
-              ))}
-            </ul>
+          {/* Skill preview card */}
+          <div className="rounded-2xl p-5 mb-5" style={{ background: config.bgColor, border: `1px solid ${config.color}` }}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">{config.emoji}</span>
+              <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.1)', color: config.color }}>
+                {selectedCategory?.label}
+              </span>
+            </div>
+            <p className="text-lg font-bold mb-2" style={{ color: '#F0F4FF' }}>{skillProposal.skillName}</p>
+            <p className="text-xs mb-3" style={{ color: '#94A3B8' }}>{skillProposal.summary}</p>
+            {skillProposal.keyPoints.length > 0 && (
+              <ul className="space-y-1.5">
+                {skillProposal.keyPoints.map((pt, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#D1D5DB' }}>
+                    <span style={{ color: config.color }}>▸</span>
+                    {pt}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          <p className="text-sm mb-2 font-bold">スキル名を確認・編集</p>
+          {/* Persona insight preview */}
+          {skillProposal.personaInsight && (
+            <div className="rounded-xl px-4 py-3 mb-4 text-xs" style={{ background: 'rgba(72,187,120,0.08)', border: '1px solid rgba(72,187,120,0.2)' }}>
+              <p className="font-bold mb-1" style={{ color: '#48BB78' }}>🧬 行動特性を検出</p>
+              <p style={{ color: '#94A3B8' }}>{skillProposal.personaInsight}</p>
+            </div>
+          )}
+
+          <p className="text-xs font-bold mb-2" style={{ color: '#64748B' }}>スキル名を確認・編集</p>
           <input
             type="text"
             value={skillName}
             onChange={(e) => setSkillName(e.target.value)}
             maxLength={20}
             autoFocus
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-1"
+            className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-5"
             style={{
               background: 'rgba(255,255,255,0.06)',
               border: `1px solid ${skillName ? config.color : 'rgba(255,255,255,0.1)'}`,
               color: '#F0F4FF',
             }}
           />
-          <p className="text-xs mb-6" style={{ color: '#64748B' }}>{skillProposal.summary}</p>
 
           <button
             onClick={handleSkillConfirm}
@@ -396,37 +446,54 @@ export default function TrainPage() {
         </div>
       )}
 
-      {/* Phase: Skill revealed */}
+      {/* Skill revealed */}
       {phase === 'skill-revealed' && earnedSkill && (
         <div className="flex-1 flex flex-col justify-center fade-in-up">
-          <p className="text-xs text-center tracking-widest mb-6" style={{ color: '#FFC300' }}>SKILL UNLOCKED</p>
+          <p className="text-xs text-center tracking-widest mb-5" style={{ color: '#FFC300' }}>SKILL UNLOCKED</p>
 
           <div
-            className="rounded-2xl p-6 mb-6"
+            className="rounded-2xl p-6 mb-5"
             style={{ background: config.bgColor, border: `1px solid ${config.color}`, boxShadow: `0 0 24px ${config.color}33` }}
           >
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">{config.emoji}</span>
-              <span className="text-xs font-bold" style={{ color: config.color }}>{agent.type}</span>
-              <span className="text-xs ml-auto" style={{ color: '#64748B' }}>#{agent.skills.length}</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{config.emoji}</span>
+                <span className="text-xs font-bold" style={{ color: config.color }}>{agent.type}</span>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.08)', color: '#64748B' }}>
+                #{agent.skills.length}
+              </span>
             </div>
             <h3 className="text-xl font-bold mb-1">{earnedSkill.name}</h3>
-            <p className="text-xs" style={{ color: '#94A3B8' }}>{earnedSkill.description}</p>
+            <p className="text-xs mb-3" style={{ color: '#94A3B8' }}>{earnedSkill.description}</p>
             {skillProposal?.keyPoints && skillProposal.keyPoints.length > 0 && (
-              <ul className="mt-3 pt-3 space-y-1 text-xs" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}>
-                {skillProposal.keyPoints.map((pt, i) => <li key={i}>・{pt}</li>)}
+              <ul className="space-y-1.5 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                {skillProposal.keyPoints.map((pt, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#64748B' }}>
+                    <span style={{ color: config.color }}>▸</span>{pt}
+                  </li>
+                ))}
               </ul>
             )}
           </div>
 
+          {/* New persona trait */}
+          {newPersonaTrait && (
+            <div className="rounded-xl px-4 py-3 mb-5 text-xs fade-in-up" style={{ background: 'rgba(72,187,120,0.08)', border: '1px solid rgba(72,187,120,0.25)' }}>
+              <p className="font-bold mb-1" style={{ color: '#48BB78' }}>🧬 ペルソナに追加</p>
+              <p style={{ color: '#94A3B8' }}>{newPersonaTrait}</p>
+              <p className="mt-1" style={{ color: '#4A5568' }}>次のセッションからエージェントの振る舞いに反映されます</p>
+            </div>
+          )}
+
           {prevParams && (
-            <div className="rounded-xl p-5 mb-6" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            <div className="rounded-xl p-5 mb-5" style={{ background: 'rgba(255,255,255,0.04)' }}>
               <p className="text-xs mb-4" style={{ color: '#64748B' }}>パラメーター上昇</p>
               <ParameterBar params={agent.params} prevParams={prevParams} accentColor={config.color} />
             </div>
           )}
 
-          <div className="rounded-xl p-4 mb-6" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)' }}>
+          <div className="rounded-xl p-4 mb-5" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)' }}>
             <div className="flex justify-between text-xs mb-2">
               <span style={{ color: '#FFC300' }}>誕生まで</span>
               <span style={{ color: '#FFC300' }}>
@@ -448,14 +515,17 @@ export default function TrainPage() {
         </div>
       )}
 
-      {/* Phase: Born */}
+      {/* Born */}
       {phase === 'born' && (
         <div className="flex-1 flex flex-col items-center justify-center text-center fade-in-up">
           <div className="text-6xl mb-6">{config.emoji}</div>
           <p className="text-xs tracking-widest mb-3" style={{ color: '#FFC300' }}>AGENT COMPLETE</p>
           <h2 className="text-2xl font-bold mb-2">{agent.name}、誕生！</h2>
           <p className="text-sm" style={{ color: config.color }}>{agent.type}</p>
-          <p className="text-sm mt-4" style={{ color: '#94A3B8' }}>スキル {agent.skills.length} 個を習得</p>
+          <p className="text-sm mt-3 mb-1" style={{ color: '#94A3B8' }}>スキル {agent.skills.length} 個を習得</p>
+          {agent.personaTraits.length > 0 && (
+            <p className="text-sm" style={{ color: '#48BB78' }}>行動特性 {agent.personaTraits.length} 件を記録</p>
+          )}
           <div className="rounded-xl p-5 w-full mt-6" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <ParameterBar params={agent.params} accentColor={config.color} />
           </div>

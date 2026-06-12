@@ -11,6 +11,7 @@ export interface Agent {
     creativity: number
   }
   skills: Skill[]
+  personaTraits: string[]
   totalTokens: number
   sessionTokens: number
 }

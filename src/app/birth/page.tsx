@@ -31,6 +31,7 @@ export default function BirthPage() {
       type: agentType,
       params: { ...config.params },
       skills: [],
+      personaTraits: [],
       totalTokens: 0,
       sessionTokens: 0,
     }
