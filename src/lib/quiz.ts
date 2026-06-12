@@ -63,7 +63,7 @@ export const AGENT_TYPES: Record<AgentType, AgentTypeConfig> = {
     emoji: '🔍',
     description: 'パターンを読み、先を見通す。情報を整理して最適解を導く思考家。',
     firstLine: 'よし、まず状況を整理しよう。何から始めるか、一緒に考えよう。',
-    params: { expertise: 65, empathy: 30, analysis: 82, execution: 42, creativity: 48 },
+    params: { expertise: 15, empathy: 10, analysis: 22, execution: 12, creativity: 12 },
   },
   設計型: {
     type: '設計型',
@@ -72,7 +72,7 @@ export const AGENT_TYPES: Record<AgentType, AgentTypeConfig> = {
     emoji: '📐',
     description: '構造を作り、着実に前進する。どんな問題も設計すれば解ける。',
     firstLine: '最初に全体の構造を作ろう。分解すれば、どんな問題も解ける。',
-    params: { expertise: 52, empathy: 38, analysis: 72, execution: 78, creativity: 34 },
+    params: { expertise: 12, empathy: 10, analysis: 18, execution: 22, creativity: 10 },
   },
   突破型: {
     type: '突破型',
@@ -81,7 +81,7 @@ export const AGENT_TYPES: Record<AgentType, AgentTypeConfig> = {
     emoji: '⚡',
     description: '動くことで道を開く。エネルギーと行動力で壁をぶち破る実行者。',
     firstLine: '行動あるのみ！まずやってみよう。考えすぎは禁物だよ。',
-    params: { expertise: 42, empathy: 45, analysis: 44, execution: 88, creativity: 66 },
+    params: { expertise: 10, empathy: 12, analysis: 10, execution: 22, creativity: 18 },
   },
   共鳴型: {
     type: '共鳴型',
@@ -90,7 +90,7 @@ export const AGENT_TYPES: Record<AgentType, AgentTypeConfig> = {
     emoji: '🌱',
     description: '人の感情を感じ取り、つながりを生む。深い対話で本質を引き出す。',
     firstLine: 'あなたのこと、もっと知りたい。どんなことで悩んでいる？',
-    params: { expertise: 35, empathy: 86, analysis: 40, execution: 44, creativity: 72 },
+    params: { expertise: 10, empathy: 22, analysis: 10, execution: 12, creativity: 18 },
   },
 }
 

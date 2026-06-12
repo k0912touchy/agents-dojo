@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { QUIZ_QUESTIONS, judgeType, AGENT_TYPES, type AgentType } from '@/lib/quiz'
-import { loadAgent, type Agent } from '@/lib/agent'
+import { loadAgent, calcAgentTier, TIER_COLORS, type Agent } from '@/lib/agent'
 
 type Mode = 'loading' | 'resume' | 'intro' | 'quiz'
 
@@ -58,6 +58,7 @@ export default function HomePage() {
   if (mode === 'resume' && savedAgent) {
     const config = AGENT_TYPES[savedAgent.type]
     const progress = Math.min((savedAgent.totalTokens / 5000) * 100, 100)
+    const tier = calcAgentTier(savedAgent)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full fade-in-up">
@@ -71,8 +72,16 @@ export default function HomePage() {
           >
             <div className="flex items-center gap-4 mb-4">
               <div className="text-4xl">{config.emoji}</div>
-              <div>
-                <h2 className="text-xl font-bold">{savedAgent.name}</h2>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold">{savedAgent.name}</h2>
+                  <span
+                    className="text-sm font-black px-2 py-0.5 rounded"
+                    style={{ background: `${TIER_COLORS[tier]}22`, color: TIER_COLORS[tier], border: `1px solid ${TIER_COLORS[tier]}55` }}
+                  >
+                    {tier}
+                  </span>
+                </div>
                 <p className="text-sm" style={{ color: config.color }}>{savedAgent.type}</p>
               </div>
             </div>
@@ -115,7 +124,7 @@ export default function HomePage() {
             className="w-full py-4 rounded-xl font-bold text-base transition-all hover:scale-[1.02] mb-3"
             style={{ background: '#FFC300', color: '#0A0F2C' }}
           >
-            続きを教え込む →
+            教え込みを続ける →
           </button>
           <button
             onClick={startNew}
@@ -132,24 +141,48 @@ export default function HomePage() {
   // Intro screen
   if (mode === 'intro') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4">
-        <div className="max-w-md w-full text-center fade-in-up">
-          <div className="text-5xl mb-6">⚔️</div>
-          <h1 className="text-3xl font-bold mb-2 tracking-tight">Agents DOJO</h1>
-          <p className="text-sm mb-1" style={{ color: '#FFC300' }}>β版 デモ</p>
-          <p className="mt-6 text-base leading-relaxed" style={{ color: '#94A3B8' }}>
-            覚えてくれるAIを、自分で作る。<br />育てるほど、仕事が変わる。
-          </p>
-          <p className="mt-8 text-sm" style={{ color: '#64748B' }}>
-            まず、あなたの思考タイプを診断します。<br />3問・約2分
-          </p>
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10">
+        <div className="max-w-md w-full fade-in-up">
+          {/* Hero */}
+          <div className="text-center mb-10">
+            <div className="text-5xl mb-5">⚔️</div>
+            <h1 className="text-3xl font-bold mb-2 tracking-tight">Agents DOJO</h1>
+            <p className="text-sm px-2 py-1 rounded-full inline-block mb-4" style={{ background: 'rgba(255,195,0,0.12)', color: '#FFC300' }}>β版 デモ</p>
+            <p className="text-base leading-relaxed" style={{ color: '#94A3B8' }}>
+              あなたの知識を教えるたびに賢くなる、<br />
+              <span style={{ color: '#F0F4FF' }}>あなただけのAIエージェント</span>を育てる。
+            </p>
+          </div>
+
+          {/* How it works */}
+          <div className="rounded-2xl p-5 mb-6" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <p className="text-xs font-bold mb-4 tracking-widest" style={{ color: '#64748B' }}>HOW IT WORKS</p>
+            <div className="flex flex-col gap-4">
+              {[
+                { step: '01', emoji: '💬', title: '会話で教え込む', desc: '自分の知識・経験・判断軸をエージェントに話しかけるだけ' },
+                { step: '02', emoji: '🃏', title: 'スキルカードに結晶化', desc: 'セッションがスキルとして記録される。何をどれだけ持っているか一目でわかる' },
+                { step: '03', emoji: '🚀', title: 'エージェントが進化する', desc: '教えるほどパラメーターが育ち、あなたの分身として機能するようになる' },
+              ].map(({ step, emoji, title, desc }) => (
+                <div key={step} className="flex gap-4 items-start">
+                  <div className="text-xs font-black shrink-0 w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,195,0,0.1)', color: '#FFC300' }}>{step}</div>
+                  <div>
+                    <p className="text-sm font-bold mb-0.5">{emoji} {title}</p>
+                    <p className="text-xs leading-relaxed" style={{ color: '#64748B' }}>{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CTA */}
           <button
             onClick={() => setMode('quiz')}
-            className="mt-10 w-full py-4 rounded-xl text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full py-4 rounded-xl text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] mb-3"
             style={{ background: '#FFC300', color: '#0A0F2C' }}
           >
-            診断スタート →
+            思考タイプ診断スタート →
           </button>
+          <p className="text-center text-xs" style={{ color: '#4A5568' }}>3問・約1分 · アカウント登録不要</p>
         </div>
       </div>
     )
