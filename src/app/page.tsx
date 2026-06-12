@@ -1,65 +1,125 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { QUIZ_QUESTIONS, judgeType, type AgentType } from '@/lib/quiz'
+import { AGENT_TYPES } from '@/lib/quiz'
+
+export default function QuizPage() {
+  const router = useRouter()
+  const [step, setStep] = useState(0) // 0 = intro, 1-3 = questions
+  const [answers, setAnswers] = useState<AgentType[]>([])
+  const [selected, setSelected] = useState<AgentType | null>(null)
+  const [transitioning, setTransitioning] = useState(false)
+
+  const question = QUIZ_QUESTIONS[step - 1]
+
+  function handleStart() {
+    setStep(1)
+  }
+
+  function handleSelect(type: AgentType) {
+    if (transitioning) return
+    setSelected(type)
+    setTransitioning(true)
+
+    setTimeout(() => {
+      const newAnswers = [...answers, type]
+      if (step < 3) {
+        setAnswers(newAnswers)
+        setSelected(null)
+        setTransitioning(false)
+        setStep(step + 1)
+      } else {
+        const agentType = judgeType(newAnswers)
+        sessionStorage.setItem('dojo_quiz_answers', JSON.stringify(newAnswers))
+        sessionStorage.setItem('dojo_agent_type', agentType)
+        router.push('/birth')
+      }
+    }, 500)
+  }
+
+  if (step === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="max-w-md w-full text-center fade-in-up">
+          <div className="text-5xl mb-6">⚔️</div>
+          <h1 className="text-3xl font-bold mb-2 tracking-tight">Agents DOJO</h1>
+          <p className="text-sm mb-1" style={{ color: '#FFC300' }}>β版 デモ</p>
+          <p className="mt-6 text-base leading-relaxed" style={{ color: '#94A3B8' }}>
+            覚えてくれるAIを、自分で作る。<br />
+            育てるほど、仕事が変わる。
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <p className="mt-8 text-sm" style={{ color: '#64748B' }}>
+            まず、あなたの思考タイプを診断します。<br />
+            3問・約2分
+          </p>
+          <button
+            onClick={handleStart}
+            className="mt-10 w-full py-4 rounded-xl text-base font-bold tracking-wide transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            style={{ background: '#FFC300', color: '#0A0F2C' }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            診断スタート →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+      <div className="max-w-lg w-full fade-in-up">
+        {/* Progress */}
+        <div className="flex gap-2 mb-10">
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className="h-1 flex-1 rounded-full transition-all duration-300"
+              style={{ background: n <= step ? '#FFC300' : 'rgba(255,255,255,0.1)' }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
-      </main>
+
+        {/* Question */}
+        <p className="text-xs mb-4 tracking-widest" style={{ color: '#FFC300' }}>
+          Q{step} / 3
+        </p>
+        <h2 className="text-xl font-bold leading-relaxed mb-8 whitespace-pre-line">
+          {question.question}
+        </h2>
+
+        {/* Options */}
+        <div className="flex flex-col gap-3">
+          {question.options.map((opt) => {
+            const typeConfig = AGENT_TYPES[opt.type]
+            const isSelected = selected === opt.type
+            return (
+              <button
+                key={opt.key}
+                onClick={() => handleSelect(opt.type)}
+                disabled={transitioning}
+                className="w-full text-left px-5 py-4 rounded-xl border transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
+                style={{
+                  background: isSelected ? typeConfig.bgColor : 'rgba(255,255,255,0.04)',
+                  borderColor: isSelected ? typeConfig.color : 'rgba(255,255,255,0.1)',
+                  color: '#F0F4FF',
+                }}
+              >
+                <span
+                  className="text-xs font-bold mr-3 px-2 py-0.5 rounded"
+                  style={{
+                    background: isSelected ? typeConfig.color : 'rgba(255,255,255,0.1)',
+                    color: isSelected ? '#0A0F2C' : '#94A3B8',
+                  }}
+                >
+                  {opt.key}
+                </span>
+                {opt.text}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
-  );
+  )
 }
