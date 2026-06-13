@@ -48,9 +48,13 @@ export default function TrainPage() {
   const [refContent, setRefContent] = useState('')
   const [fetchingUrl, setFetchingUrl] = useState(false)
   const [fetchError, setFetchError] = useState('')
-  const [topicMode, setTopicMode] = useState<'free' | 'template'>('free')
+  const [topicMode, setTopicMode] = useState<'free' | 'template' | 'consult'>('free')
   const [selectedTemplate, setSelectedTemplate] = useState<KnowledgeTemplate | null>(null)
   const [newPersonalKnowledge, setNewPersonalKnowledge] = useState<PersonalKnowledge | null>(null)
+  const [consultInput, setConsultInput] = useState('')
+  const [consultSuggestions, setConsultSuggestions] = useState<string[]>([])
+  const [consultReply, setConsultReply] = useState('')
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const agentRef = useRef<Agent | null>(null)
@@ -73,7 +77,42 @@ export default function TrainPage() {
     setTopicMode('free')
     setSelectedTemplate(null)
     setTopic('')
+    setConsultSuggestions([])
+    setConsultInput('')
+    setConsultReply('')
     setPhase('topic')
+  }
+
+  async function handleConsultSubmit() {
+    if (!consultInput.trim() || !selectedCategory || !agentRef.current) return
+    setLoadingSuggestions(true)
+    try {
+      const res = await fetch('/api/suggest-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryLabel: selectedCategory.label,
+          userMessage: consultInput.trim(),
+          agentType: agentRef.current.type,
+        }),
+      })
+      const data = await res.json()
+      setConsultSuggestions(data.suggestions ?? [])
+      setConsultReply(data.reply ?? '')
+    } catch {
+      setConsultSuggestions([`${selectedCategory.label}の実践アプローチ`, `${selectedCategory.label}の判断基準`, `${selectedCategory.label}の失敗と対策`])
+      setConsultReply('いくつか提案しました。')
+    } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
+  function handleSuggestionSelect(suggestion: string) {
+    setTopic(suggestion)
+    setTopicMode('free')
+    setConsultSuggestions([])
+    setConsultInput('')
+    setConsultReply('')
   }
 
   function handleTemplateSelect(tpl: KnowledgeTemplate) {
@@ -287,6 +326,9 @@ export default function TrainPage() {
       setTopicMode('free')
       setSelectedTemplate(null)
       setNewPersonalKnowledge(null)
+      setConsultInput('')
+      setConsultSuggestions([])
+      setConsultReply('')
     }
   }
 
@@ -383,81 +425,189 @@ export default function TrainPage() {
       {/* Topic input */}
       {phase === 'topic' && selectedCategory && (
         <div className="fade-in-up flex flex-col flex-1">
-          <button onClick={() => setPhase('category')} className="flex items-center gap-1 text-xs mb-6 w-fit" style={{ color: '#64748B' }}>
+          <button
+            onClick={() => setPhase('category')}
+            className="flex items-center gap-1 text-xs mb-6 w-fit"
+            style={{ color: '#64748B' }}
+          >
             ← 戻る
           </button>
           <div className="text-2xl mb-3">{selectedCategory.emoji}</div>
           <h2 className="text-lg font-bold mb-1">{selectedCategory.label}</h2>
-          <p className="text-sm mb-4" style={{ color: '#64748B' }}>何を教え込みたい？</p>
 
-          {/* テンプレートモードバナー */}
-          {topicMode === 'template' && selectedTemplate && (
-            <div className="rounded-xl px-4 py-3 mb-4 text-xs" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.25)' }}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold" style={{ color: '#FFC300' }}>{selectedTemplate.emoji} {selectedTemplate.name}</span>
-                <button
-                  onClick={() => { setTopicMode('free'); setSelectedTemplate(null); setRefContent(''); setTopic('') }}
-                  className="text-xs" style={{ color: '#64748B' }}
-                >
-                  ✕ 解除
-                </button>
+          {/* consult モード */}
+          {topicMode === 'consult' && (
+            <div className="flex flex-col flex-1">
+              <p className="text-sm mb-5" style={{ color: '#64748B' }}>どんな場面で使いたいか教えて。テーマを提案します。</p>
+
+              {/* Agent opening */}
+              <div className="flex gap-3 mb-5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0" style={{ background: config.bgColor }}>
+                  {config.emoji}
+                </div>
+                <div className="rounded-2xl rounded-tl-none px-4 py-3 text-sm leading-relaxed" style={{ background: 'rgba(255,255,255,0.06)', color: '#D1D5DB' }}>
+                  「{selectedCategory.label}」で、どんなシーンや状況に役立てたいですか？
+                  <br />今困ってること・課題・シーンを教えてもらえると、ぴったりのテーマを提案します。
+                </div>
               </div>
-              <p style={{ color: '#94A3B8' }}>フレームワークの基礎知識をベースに、あなた流のアレンジを教え込みます</p>
+
+              {consultSuggestions.length === 0 ? (
+                <>
+                  <textarea
+                    value={consultInput}
+                    onChange={(e) => setConsultInput(e.target.value)}
+                    placeholder={`例：${selectedCategory.placeholder}`}
+                    rows={4}
+                    autoFocus
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none mb-4"
+                    style={{
+                      background: 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${consultInput ? config.color : 'rgba(255,255,255,0.1)'}`,
+                      color: '#F0F4FF',
+                    }}
+                  />
+                  <button
+                    onClick={handleConsultSubmit}
+                    disabled={!consultInput.trim() || loadingSuggestions}
+                    className="w-full py-4 rounded-xl font-bold text-base disabled:opacity-30 transition-all hover:scale-[1.02] mb-3"
+                    style={{ background: '#FFC300', color: '#0A0F2C' }}
+                  >
+                    {loadingSuggestions ? '考え中…' : 'テーマを提案してもらう →'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Agent reply */}
+                  <div className="flex gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0" style={{ background: config.bgColor }}>
+                      {config.emoji}
+                    </div>
+                    <div className="rounded-2xl rounded-tl-none px-4 py-3 text-sm leading-relaxed" style={{ background: 'rgba(255,255,255,0.06)', color: '#D1D5DB' }}>
+                      {consultReply}
+                    </div>
+                  </div>
+
+                  {/* Suggestions */}
+                  <div className="flex flex-col gap-2 mb-4">
+                    {consultSuggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSuggestionSelect(s)}
+                        className="w-full px-4 py-3.5 rounded-xl text-sm text-left font-bold transition-all hover:scale-[1.01]"
+                        style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.3)', color: '#F0F4FF' }}
+                      >
+                        <span style={{ color: '#FFC300' }}>▸</span> {s}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => { setConsultSuggestions([]); setConsultInput(''); setConsultReply('') }}
+                    className="text-xs mb-3"
+                    style={{ color: '#64748B' }}
+                  >
+                    ← もう一度相談する
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={() => { setTopicMode('free'); setConsultSuggestions([]); setConsultInput('') }}
+                className="text-xs"
+                style={{ color: '#4A5568' }}
+              >
+                直接入力する
+              </button>
             </div>
           )}
 
-          <textarea
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder={selectedCategory.placeholder}
-            rows={3}
-            autoFocus
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none mb-4"
-            style={{
-              background: 'rgba(255,255,255,0.06)',
-              border: `1px solid ${topic ? config.color : 'rgba(255,255,255,0.1)'}`,
-              color: '#F0F4FF',
-            }}
-          />
-          {selectedCategory.id === 'thinking' && (
-            <div className="rounded-xl px-4 py-3 mb-4 text-xs leading-relaxed" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)', color: '#94A3B8' }}>
-              💡 意思決定の経緯・書いた文章・判断の基準など貼るとAIが思考パターンを抽出します
-            </div>
+          {/* free / template モード */}
+          {topicMode !== 'consult' && (
+            <>
+              <p className="text-sm mb-4" style={{ color: '#64748B' }}>何を教え込みたい？</p>
+
+              {/* テンプレートモードバナー */}
+              {topicMode === 'template' && selectedTemplate && (
+                <div className="rounded-xl px-4 py-3 mb-4 text-xs" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.25)' }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold" style={{ color: '#FFC300' }}>{selectedTemplate.emoji} {selectedTemplate.name}</span>
+                    <button
+                      onClick={() => { setTopicMode('free'); setSelectedTemplate(null); setRefContent(''); setTopic('') }}
+                      className="text-xs"
+                      style={{ color: '#64748B' }}
+                    >
+                      ✕ 解除
+                    </button>
+                  </div>
+                  <p style={{ color: '#94A3B8' }}>フレームワークの基礎知識をベースに、あなた流のアレンジを教え込みます</p>
+                </div>
+              )}
+
+              <textarea
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder={selectedCategory.placeholder}
+                rows={3}
+                autoFocus={topicMode === 'free'}
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none mb-4"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${topic ? config.color : 'rgba(255,255,255,0.1)'}`,
+                  color: '#F0F4FF',
+                }}
+              />
+              {selectedCategory.id === 'thinking' && (
+                <div className="rounded-xl px-4 py-3 mb-4 text-xs leading-relaxed" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)', color: '#94A3B8' }}>
+                  💡 意思決定の経緯・書いた文章・判断の基準など貼るとAIが思考パターンを抽出します
+                </div>
+              )}
+
+              {/* Reference URL */}
+              <div className="mb-4">
+                <p className="text-xs mb-2" style={{ color: '#4A5568' }}>📎 参考URLを追加（任意）</p>
+                <input
+                  type="url"
+                  value={refUrl}
+                  onChange={(e) => { setRefUrl(e.target.value); setFetchError('') }}
+                  placeholder="https://..."
+                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${refContent ? 'rgba(72,187,120,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                    color: '#F0F4FF',
+                  }}
+                />
+                {refContent && (
+                  <p className="text-xs mt-1.5" style={{ color: '#48BB78' }}>
+                    ✅ {refContent.length.toLocaleString()}文字取得済み
+                  </p>
+                )}
+                {fetchError && (
+                  <p className="text-xs mt-1.5" style={{ color: '#FC8181' }}>{fetchError}</p>
+                )}
+              </div>
+
+              <button
+                onClick={handleTopicConfirm}
+                disabled={!topic.trim() || fetchingUrl}
+                className="w-full py-4 rounded-xl font-bold text-base disabled:opacity-30 transition-all hover:scale-[1.02] mb-3"
+                style={{ background: '#FFC300', color: '#0A0F2C' }}
+              >
+                {fetchingUrl ? 'URL取得中…' : 'セッション開始 →'}
+              </button>
+
+              {/* 相談モードへの誘導 */}
+              {topicMode === 'free' && (
+                <button
+                  onClick={() => { setTopicMode('consult'); setTopic('') }}
+                  className="w-full py-3 rounded-xl text-sm transition-all"
+                  style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}
+                >
+                  🤔 何を学ぶか相談して決める
+                </button>
+              )}
+            </>
           )}
-
-          {/* Reference URL */}
-          <div className="mb-4">
-            <p className="text-xs mb-2" style={{ color: '#4A5568' }}>📎 参考URLを追加（任意）</p>
-            <input
-              type="url"
-              value={refUrl}
-              onChange={(e) => { setRefUrl(e.target.value); setFetchError('') }}
-              placeholder="https://..."
-              className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: `1px solid ${refContent ? 'rgba(72,187,120,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                color: '#F0F4FF',
-              }}
-            />
-            {refContent && (
-              <p className="text-xs mt-1.5" style={{ color: '#48BB78' }}>
-                ✅ {refContent.length.toLocaleString()}文字取得済み
-              </p>
-            )}
-            {fetchError && (
-              <p className="text-xs mt-1.5" style={{ color: '#FC8181' }}>{fetchError}</p>
-            )}
-          </div>
-
-          <button
-            onClick={handleTopicConfirm}
-            disabled={!topic.trim() || fetchingUrl}
-            className="w-full py-4 rounded-xl font-bold text-base disabled:opacity-30 transition-all hover:scale-[1.02]"
-            style={{ background: '#FFC300', color: '#0A0F2C' }}
-          >
-            {fetchingUrl ? 'URL取得中…' : 'セッション開始 →'}
-          </button>
         </div>
       )}
 
