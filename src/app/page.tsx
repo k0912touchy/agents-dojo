@@ -128,6 +128,15 @@ export default function HomePage() {
           >
             教え込みを続ける →
           </button>
+          {savedAgent.skills.length > 0 && (
+            <button
+              onClick={() => router.push('/quest')}
+              className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] mb-3"
+              style={{ background: 'rgba(255,195,0,0.1)', border: '1px solid rgba(255,195,0,0.3)', color: '#FFC300' }}
+            >
+              ⚔️ クエストに挑む
+            </button>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => router.push('/library')}

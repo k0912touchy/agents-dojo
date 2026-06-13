@@ -7,6 +7,15 @@ export interface PersonalKnowledge {
   detectedAt: string
 }
 
+export interface SkillSeed {
+  id: string
+  title: string
+  summary: string
+  relatedSkillName?: string
+  fromQuestTitle?: string
+  discoveredAt: string
+}
+
 export interface Agent {
   name: string
   type: AgentType
@@ -20,6 +29,7 @@ export interface Agent {
   skills: Skill[]
   personaTraits: string[]
   personalKnowledge?: PersonalKnowledge[]
+  skillSeeds?: SkillSeed[]
   totalTokens: number
   sessionTokens: number
 }

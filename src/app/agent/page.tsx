@@ -173,6 +173,26 @@ export default function AgentPage() {
         </div>
       )}
 
+      {/* Skill seeds */}
+      {(agent.skillSeeds ?? []).length > 0 && (
+        <div className="mb-8">
+          <p className="text-xs font-bold mb-3" style={{ color: '#64748B' }}>
+            💡 スキルの種 <span style={{ color: '#FFC300' }}>{agent.skillSeeds!.length}</span>
+          </p>
+          <div className="flex flex-col gap-2">
+            {agent.skillSeeds!.map((seed, i) => (
+              <div key={i} className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,195,0,0.05)', border: '1px solid rgba(255,195,0,0.15)' }}>
+                <p className="text-xs font-bold mb-0.5" style={{ color: '#FFC300' }}>{seed.title}</p>
+                <p className="text-xs" style={{ color: '#64748B' }}>{seed.summary}</p>
+                {seed.fromQuestTitle && (
+                  <p className="text-xs mt-1" style={{ color: '#4A5568' }}>⚔️ {seed.fromQuestTitle}から</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Personal knowledge */}
       {(agent.personalKnowledge ?? []).length > 0 && (
         <div className="mb-8">
