@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { QUIZ_QUESTIONS, judgeType, AGENT_TYPES, type AgentType } from '@/lib/quiz'
-import { loadAgent, calcAgentTier, TIER_COLORS, type Agent } from '@/lib/agent'
+import { loadAgent, saveAgentToArchive, calcAgentTier, TIER_COLORS, type Agent } from '@/lib/agent'
 
 type Mode = 'loading' | 'resume' | 'intro' | 'quiz'
 
@@ -47,6 +47,8 @@ export default function HomePage() {
   }
 
   function startNew() {
+    const current = loadAgent()
+    if (current) saveAgentToArchive(current)
     localStorage.removeItem('dojo_agent')
     setSavedAgent(null)
     setMode('intro')
@@ -126,13 +128,22 @@ export default function HomePage() {
           >
             教え込みを続ける →
           </button>
-          <button
-            onClick={startNew}
-            className="w-full py-3 rounded-xl text-sm transition-all hover:opacity-70"
-            style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}
-          >
-            新しいエージェントを作る
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push('/library')}
+              className="flex-1 py-3 rounded-xl text-sm transition-all hover:opacity-70"
+              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
+            >
+              📚 ライブラリ
+            </button>
+            <button
+              onClick={startNew}
+              className="flex-1 py-3 rounded-xl text-sm transition-all hover:opacity-70"
+              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}
+            >
+              ＋ 新規作成
+            </button>
+          </div>
         </div>
       </div>
     )

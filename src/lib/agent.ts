@@ -153,3 +153,23 @@ export function loadDetectedTraits(): DetectedTrait[] {
     return []
   }
 }
+
+export function saveAgentToArchive(agent: Agent) {
+  const archive = loadAgentArchive()
+  const idx = archive.findIndex((a) => a.name === agent.name && a.type === agent.type)
+  if (idx >= 0) {
+    archive[idx] = agent
+  } else {
+    archive.unshift(agent)
+  }
+  localStorage.setItem('dojo_agents_archive', JSON.stringify(archive))
+}
+
+export function loadAgentArchive(): Agent[] {
+  try {
+    const raw = localStorage.getItem('dojo_agents_archive')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
