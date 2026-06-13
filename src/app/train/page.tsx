@@ -48,7 +48,7 @@ export default function TrainPage() {
   const [refContent, setRefContent] = useState('')
   const [fetchingUrl, setFetchingUrl] = useState(false)
   const [fetchError, setFetchError] = useState('')
-  const [topicMode, setTopicMode] = useState<'select' | 'free' | 'template' | 'consult'>('select')
+  const [topicMode, setTopicMode] = useState<'select' | 'free' | 'template' | 'consult' | 'guide-confirm'>('select')
   const [selectedTemplate, setSelectedTemplate] = useState<KnowledgeTemplate | null>(null)
   const [newPersonalKnowledge, setNewPersonalKnowledge] = useState<PersonalKnowledge | null>(null)
   const [consultInput, setConsultInput] = useState('')
@@ -58,6 +58,9 @@ export default function TrainPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [selectedBackground, setSelectedBackground] = useState('')
   const [topicOrigin, setTopicOrigin] = useState<'free' | 'consult'>('free')
+  const [guideResearch, setGuideResearch] = useState<{ researchPoints: string[]; confirmQuestion: string } | null>(null)
+  const [guideAnswer, setGuideAnswer] = useState('')
+  const [loadingResearch, setLoadingResearch] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const agentRef = useRef<Agent | null>(null)
@@ -86,6 +89,9 @@ export default function TrainPage() {
     setConsultReply('')
     setSelectedBackground('')
     setTopicOrigin('free')
+    setGuideResearch(null)
+    setGuideAnswer('')
+    setLoadingResearch(false)
     setPhase('topic')
   }
 
@@ -114,15 +120,35 @@ export default function TrainPage() {
     }
   }
 
-  function handleSuggestionSelect(suggestion: string, background: string) {
+  async function handleSuggestionSelect(suggestion: string, background: string) {
     setTopic(suggestion)
     setSelectedBackground(background)
     setTopicOrigin('consult')
-    setTopicMode('free')
     setConsultSuggestions([])
     setConsultBackgrounds([])
     setConsultInput('')
     setConsultReply('')
+    setGuideAnswer('')
+    setTopicMode('guide-confirm')
+    setLoadingResearch(true)
+    try {
+      const res = await fetch('/api/research-topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryLabel: selectedCategory?.label ?? '',
+          topic: suggestion,
+          background,
+          agentType: agentRef.current?.type ?? '',
+        }),
+      })
+      const data = await res.json()
+      setGuideResearch(data)
+    } catch {
+      setGuideResearch({ researchPoints: [], confirmQuestion: `${suggestion}について、実際に経験した場面はありますか？` })
+    } finally {
+      setLoadingResearch(false)
+    }
   }
 
   function handleTemplateSelect(tpl: KnowledgeTemplate) {
@@ -166,6 +192,9 @@ export default function TrainPage() {
     }
 
     const bg = selectedBackground || refContent
+    if (guideAnswer.trim()) {
+      setRefContent(prev => prev ? `${prev}\n\nユーザーの視点：${guideAnswer}` : `ユーザーの視点：${guideAnswer}`)
+    }
     const openings: Record<string, string> = topicOrigin === 'consult' && bg ? {
       先読み型: `「${topic}」ですね。${config.emoji}\n\nまず背景を整理します。\n${bg}\n\nあなたの経験や職場では、これに近い場面はありましたか？どんな小さな話でもOKです。`,
       設計型: `「${topic}」を一緒に体系化していきます！${config.emoji}\n\n${bg}\n\nまずあなたの実際の状況から聞かせてください。これに近いことを経験した場面はありますか？`,
@@ -348,6 +377,9 @@ export default function TrainPage() {
       setConsultReply('')
       setSelectedBackground('')
       setTopicOrigin('free')
+      setGuideResearch(null)
+      setGuideAnswer('')
+      setLoadingResearch(false)
     }
   }
 
@@ -555,8 +587,87 @@ export default function TrainPage() {
             </div>
           )}
 
+          {/* ガイド確認モード */}
+          {topicMode === 'guide-confirm' && (
+            <div className="flex flex-col flex-1 mt-4">
+              {/* トピックヘッダー */}
+              <div className="rounded-xl px-4 py-3 mb-4" style={{ background: `${config.color}12`, border: `1px solid ${config.color}33` }}>
+                <p className="text-xs mb-0.5" style={{ color: config.color }}>選択したテーマ</p>
+                <p className="font-bold text-sm">{topic}</p>
+              </div>
+
+              {loadingResearch ? (
+                <div className="flex items-center gap-3 py-6">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 animate-pulse" style={{ background: config.bgColor }}>
+                    {config.emoji}
+                  </div>
+                  <p className="text-sm" style={{ color: '#94A3B8' }}>調べています…</p>
+                </div>
+              ) : guideResearch && (
+                <>
+                  {/* リサーチカード */}
+                  <div className="flex gap-3 mb-5">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 mt-1" style={{ background: config.bgColor }}>
+                      {config.emoji}
+                    </div>
+                    <div className="flex-1 rounded-2xl rounded-tl-none px-4 py-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      <p className="text-xs font-bold mb-2.5" style={{ color: config.color }}>「{topic}」について整理しました</p>
+                      <ul className="flex flex-col gap-2">
+                        {guideResearch.researchPoints.map((pt, i) => (
+                          <li key={i} className="flex gap-2 text-xs leading-relaxed">
+                            <span style={{ color: config.color }} className="shrink-0 mt-0.5">▸</span>
+                            <span style={{ color: '#D1D5DB' }}>{pt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* 確認の問い */}
+                  <div className="flex gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 mt-1" style={{ background: config.bgColor }}>
+                      {config.emoji}
+                    </div>
+                    <div className="rounded-2xl rounded-tl-none px-4 py-3 text-sm leading-relaxed" style={{ background: 'rgba(255,255,255,0.06)', color: '#D1D5DB' }}>
+                      {guideResearch.confirmQuestion}
+                    </div>
+                  </div>
+
+                  {/* ユーザー入力 */}
+                  <textarea
+                    value={guideAnswer}
+                    onChange={(e) => setGuideAnswer(e.target.value)}
+                    placeholder="どんな小さなことでもOKです…"
+                    rows={3}
+                    autoFocus
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none mb-4"
+                    style={{
+                      background: 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${guideAnswer ? config.color : 'rgba(255,255,255,0.1)'}`,
+                      color: '#F0F4FF',
+                    }}
+                  />
+                  <button
+                    onClick={handleTopicConfirm}
+                    className="w-full py-4 rounded-xl font-bold text-base transition-all hover:scale-[1.02] mb-3"
+                    style={{ background: '#FFC300', color: '#0A0F2C' }}
+                  >
+                    セッション開始 →
+                  </button>
+                  <button
+                    onClick={() => { setTopicMode('consult'); setGuideResearch(null); setConsultSuggestions([]); setConsultInput(''); setConsultReply('') }}
+                    className="text-xs"
+                    style={{ color: '#4A5568' }}
+                  >
+                    ← テーマを選び直す
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* free / template モード */}
-          {topicMode !== 'consult' && (
+          {topicMode !== 'consult' && topicMode !== 'guide-confirm' && (
             <>
               <p className="text-sm mb-4" style={{ color: '#64748B' }}>何を教え込みたい？</p>
 
@@ -630,7 +741,7 @@ export default function TrainPage() {
                 {fetchingUrl ? 'URL取得中…' : 'セッション開始 →'}
               </button>
 
-              {topicMode === 'free' && (
+                  {topicMode === 'free' && topicOrigin !== 'consult' && (
                 <button
                   onClick={() => setTopicMode('select')}
                   className="text-xs"
