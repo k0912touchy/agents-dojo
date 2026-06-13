@@ -48,13 +48,16 @@ export default function TrainPage() {
   const [refContent, setRefContent] = useState('')
   const [fetchingUrl, setFetchingUrl] = useState(false)
   const [fetchError, setFetchError] = useState('')
-  const [topicMode, setTopicMode] = useState<'free' | 'template' | 'consult'>('free')
+  const [topicMode, setTopicMode] = useState<'select' | 'free' | 'template' | 'consult'>('select')
   const [selectedTemplate, setSelectedTemplate] = useState<KnowledgeTemplate | null>(null)
   const [newPersonalKnowledge, setNewPersonalKnowledge] = useState<PersonalKnowledge | null>(null)
   const [consultInput, setConsultInput] = useState('')
   const [consultSuggestions, setConsultSuggestions] = useState<string[]>([])
+  const [consultBackgrounds, setConsultBackgrounds] = useState<string[]>([])
   const [consultReply, setConsultReply] = useState('')
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [selectedBackground, setSelectedBackground] = useState('')
+  const [topicOrigin, setTopicOrigin] = useState<'free' | 'consult'>('free')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const agentRef = useRef<Agent | null>(null)
@@ -74,12 +77,15 @@ export default function TrainPage() {
 
   function handleCategorySelect(cat: Category) {
     setSelectedCategory(cat)
-    setTopicMode('free')
+    setTopicMode('select')
     setSelectedTemplate(null)
     setTopic('')
     setConsultSuggestions([])
+    setConsultBackgrounds([])
     setConsultInput('')
     setConsultReply('')
+    setSelectedBackground('')
+    setTopicOrigin('free')
     setPhase('topic')
   }
 
@@ -98,6 +104,7 @@ export default function TrainPage() {
       })
       const data = await res.json()
       setConsultSuggestions(data.suggestions ?? [])
+      setConsultBackgrounds(data.backgrounds ?? [])
       setConsultReply(data.reply ?? '')
     } catch {
       setConsultSuggestions([`${selectedCategory.label}の実践アプローチ`, `${selectedCategory.label}の判断基準`, `${selectedCategory.label}の失敗と対策`])
@@ -107,10 +114,13 @@ export default function TrainPage() {
     }
   }
 
-  function handleSuggestionSelect(suggestion: string) {
+  function handleSuggestionSelect(suggestion: string, background: string) {
     setTopic(suggestion)
+    setSelectedBackground(background)
+    setTopicOrigin('consult')
     setTopicMode('free')
     setConsultSuggestions([])
+    setConsultBackgrounds([])
     setConsultInput('')
     setConsultReply('')
   }
@@ -155,7 +165,13 @@ export default function TrainPage() {
       setFetchingUrl(false)
     }
 
-    const openings: Record<string, string> = {
+    const bg = selectedBackground || refContent
+    const openings: Record<string, string> = topicOrigin === 'consult' && bg ? {
+      先読み型: `「${topic}」ですね。${config.emoji}\n\nまず背景を整理します。\n${bg}\n\nあなたの経験や職場では、これに近い場面はありましたか？どんな小さな話でもOKです。`,
+      設計型: `「${topic}」を一緒に体系化していきます！${config.emoji}\n\n${bg}\n\nまずあなたの実際の状況から聞かせてください。これに近いことを経験した場面はありますか？`,
+      突破型: `「${topic}」！${config.emoji}\n\n${bg}\n\nで、実際どう？これに近い体験、仕事でも日常でも何かある？どんな小さい話でもOK。`,
+      共鳴型: `「${topic}」について一緒に考えましょう。${config.emoji}\n\n${bg}\n\nあなた自身は、これに近い体験や感じたことはありますか？どんな小さな場面でも大丈夫です。`,
+    } : {
       先読み型: `「${topic}」ですね。${config.emoji} まず具体的なシーンから入らせてください。最近これを実際に使った・判断した場面を一つ教えてもらえますか？`,
       設計型: `「${topic}」を体系化して覚えます！${config.emoji} まず直近でこれを使った場面を一つ教えてもらえますか？実際の状況から整理していきたいので。`,
       突破型: `「${topic}」！${config.emoji} 具体的な話から入ろう。最近これを使ったシーンを一つ教えて。どんな状況だった？`,
@@ -191,7 +207,7 @@ export default function TrainPage() {
           agentName: a.name,
           category: selectedCategory.label,
           topic,
-          refContent: refContent || undefined,
+          refContent: refContent || selectedBackground || undefined,
         }),
       })
 
@@ -323,12 +339,15 @@ export default function TrainPage() {
       setRefUrl('')
       setRefContent('')
       setFetchError('')
-      setTopicMode('free')
+      setTopicMode('select')
       setSelectedTemplate(null)
       setNewPersonalKnowledge(null)
       setConsultInput('')
       setConsultSuggestions([])
+      setConsultBackgrounds([])
       setConsultReply('')
+      setSelectedBackground('')
+      setTopicOrigin('free')
     }
   }
 
@@ -370,27 +389,7 @@ export default function TrainPage() {
       {/* Category selection */}
       {phase === 'category' && (
         <div className="fade-in-up">
-          {/* テンプレートから始める */}
-          <div className="mb-6 rounded-xl p-4" style={{ background: 'rgba(255,195,0,0.06)', border: '1px solid rgba(255,195,0,0.2)' }}>
-            <p className="text-xs font-bold mb-1" style={{ color: '#FFC300' }}>📚 フレームワークから始める</p>
-            <p className="text-xs mb-3" style={{ color: '#64748B' }}>知識がなくてもOK。世の中のフレームワークをベースに自分流を教え込む</p>
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {KNOWLEDGE_TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  onClick={() => handleTemplateSelect(tpl)}
-                  className="flex-shrink-0 text-left px-3 py-2.5 rounded-xl border transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,195,0,0.25)', minWidth: '140px', maxWidth: '160px' }}
-                >
-                  <div className="text-lg mb-1">{tpl.emoji}</div>
-                  <div className="text-xs font-bold leading-tight mb-1" style={{ color: '#F0F4FF' }}>{tpl.name}</div>
-                  <div className="text-xs leading-tight" style={{ color: '#64748B' }}>{tpl.tagline}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-sm font-bold mb-1">自分の知識を教える</p>
+              <p className="text-sm font-bold mb-1">カテゴリを選ぶ</p>
           <p className="text-xs mb-5" style={{ color: '#64748B' }}>
             カテゴリを選んで {agent.name} に知識・視点を入れ込む
           </p>
@@ -434,6 +433,36 @@ export default function TrainPage() {
           </button>
           <div className="text-2xl mb-3">{selectedCategory.emoji}</div>
           <h2 className="text-lg font-bold mb-1">{selectedCategory.label}</h2>
+
+          {/* モード選択 */}
+          {topicMode === 'select' && (
+            <div className="flex flex-col gap-3 mt-4">
+              {/* 一緒に決める — 推奨 */}
+              <button
+                onClick={() => setTopicMode('consult')}
+                className="w-full text-left p-5 rounded-2xl transition-all hover:scale-[1.01]"
+                style={{ background: `${config.color}12`, border: `1.5px solid ${config.color}55` }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold text-base">💬 一緒に考えながら決める</p>
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${config.color}22`, color: config.color }}>おすすめ</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+                  知識ゼロでもOK。状況を話すだけで<br />AIがテーマを提案 → 会話スタート
+                </p>
+              </button>
+
+              {/* 自分で決める */}
+              <button
+                onClick={() => setTopicMode('free')}
+                className="w-full text-left p-4 rounded-xl transition-all hover:opacity-80"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <p className="font-bold text-sm mb-0.5">✏️ テーマを自分で入力する</p>
+                <p className="text-xs" style={{ color: '#64748B' }}>教えたいことが決まっている場合</p>
+              </button>
+            </div>
+          )}
 
           {/* consult モード */}
           {topicMode === 'consult' && (
@@ -492,11 +521,16 @@ export default function TrainPage() {
                     {consultSuggestions.map((s, i) => (
                       <button
                         key={i}
-                        onClick={() => handleSuggestionSelect(s)}
-                        className="w-full px-4 py-3.5 rounded-xl text-sm text-left font-bold transition-all hover:scale-[1.01]"
-                        style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.3)', color: '#F0F4FF' }}
+                        onClick={() => handleSuggestionSelect(s, consultBackgrounds[i] ?? '')}
+                        className="w-full px-4 py-3.5 rounded-xl text-sm text-left transition-all hover:scale-[1.01]"
+                        style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.3)' }}
                       >
-                        <span style={{ color: '#FFC300' }}>▸</span> {s}
+                        <p className="font-bold mb-0.5" style={{ color: '#F0F4FF' }}>
+                          <span style={{ color: '#FFC300' }}>▸</span> {s}
+                        </p>
+                        {consultBackgrounds[i] && (
+                          <p className="text-xs mt-1" style={{ color: '#64748B' }}>{consultBackgrounds[i]}</p>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -512,11 +546,11 @@ export default function TrainPage() {
               )}
 
               <button
-                onClick={() => { setTopicMode('free'); setConsultSuggestions([]); setConsultInput('') }}
+                onClick={() => { setTopicMode('select'); setConsultSuggestions([]); setConsultBackgrounds([]); setConsultInput('') }}
                 className="text-xs"
                 style={{ color: '#4A5568' }}
               >
-                直接入力する
+                ← 最初に戻る
               </button>
             </div>
           )}
@@ -596,14 +630,13 @@ export default function TrainPage() {
                 {fetchingUrl ? 'URL取得中…' : 'セッション開始 →'}
               </button>
 
-              {/* 相談モードへの誘導 */}
               {topicMode === 'free' && (
                 <button
-                  onClick={() => { setTopicMode('consult'); setTopic('') }}
-                  className="w-full py-3 rounded-xl text-sm transition-all"
-                  style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}
+                  onClick={() => setTopicMode('select')}
+                  className="text-xs"
+                  style={{ color: '#4A5568' }}
                 >
-                  🤔 何を学ぶか相談して決める
+                  ← 選び直す
                 </button>
               )}
             </>
