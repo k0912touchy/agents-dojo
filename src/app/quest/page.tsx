@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGENT_TYPES } from '@/lib/quiz'
 import {
-  loadAgent, saveAgent, saveDetectedTrait,
+  loadAgent, saveAgent, saveDetectedTrait, availableTokens,
   type Agent, type SkillSeed, type DetectedTrait,
 } from '@/lib/agent'
 
@@ -69,7 +69,7 @@ export default function QuestPage() {
     const a = agentRef.current
     const diff = DIFFICULTY_CONFIG[difficulty]
 
-    if (a.totalTokens < diff.tokenCost) return
+    if (availableTokens(a) < diff.tokenCost) return
     setPhase('generating')
 
     try {
@@ -129,12 +129,10 @@ export default function QuestPage() {
         setAgentResponse(content)
       }
 
-      // トークンを消費
-      const tokens = q.tokenCost
+      // トークンを消費（spentTokensを増やすだけ。totalTokensは不変）
       const updated: Agent = {
         ...a,
-        totalTokens: Math.max(0, a.totalTokens - tokens),
-        sessionTokens: a.sessionTokens,
+        spentTokens: (a.spentTokens ?? 0) + q.tokenCost,
       }
       agentRef.current = updated
       setAgent(updated)
@@ -231,7 +229,7 @@ export default function QuestPage() {
           </div>
           <span className="text-sm font-bold">{agent.name}</span>
           <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(255,195,0,0.15)', color: '#FFC300' }}>
-            {agent.totalTokens.toLocaleString()} tokens
+            {availableTokens(agent).toLocaleString()} tokens
           </span>
         </div>
       </div>
@@ -254,7 +252,7 @@ export default function QuestPage() {
           <div className="flex flex-col gap-3 mb-6">
             {([1, 2, 3] as const).map((d) => {
               const dc = DIFFICULTY_CONFIG[d]
-              const canAfford = agent.totalTokens >= dc.tokenCost
+              const canAfford = availableTokens(agent) >= dc.tokenCost
               return (
                 <button
                   key={d}
@@ -284,7 +282,7 @@ export default function QuestPage() {
 
           <button
             onClick={handleStartQuest}
-            disabled={agent.skills.length === 0 || agent.totalTokens < DIFFICULTY_CONFIG[difficulty].tokenCost}
+            disabled={agent.skills.length === 0 || availableTokens(agent) < DIFFICULTY_CONFIG[difficulty].tokenCost}
             className="w-full py-4 rounded-xl font-bold text-base disabled:opacity-30 transition-all hover:scale-[1.02]"
             style={{ background: '#FFC300', color: '#0A0F2C' }}
           >

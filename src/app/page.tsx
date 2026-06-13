@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { QUIZ_QUESTIONS, judgeType, AGENT_TYPES, type AgentType } from '@/lib/quiz'
-import { loadAgent, saveAgentToArchive, calcAgentTier, TIER_COLORS, type Agent } from '@/lib/agent'
+import { loadAgent, saveAgentToArchive, calcAgentTier, availableTokens, TIER_COLORS, type Agent } from '@/lib/agent'
 
 type Mode = 'loading' | 'resume' | 'intro' | 'quiz'
 
@@ -101,6 +101,12 @@ export default function HomePage() {
                 <p className="text-xs mb-0.5" style={{ color: '#64748B' }}>累計tokens</p>
                 <p className="font-bold">{savedAgent.totalTokens.toLocaleString()}</p>
               </div>
+              {(savedAgent.spentTokens ?? 0) > 0 && (
+                <div>
+                  <p className="text-xs mb-0.5" style={{ color: '#64748B' }}>使用可能</p>
+                  <p className="font-bold" style={{ color: '#FFC300' }}>{availableTokens(savedAgent).toLocaleString()}</p>
+                </div>
+              )}
             </div>
 
             {/* Progress */}

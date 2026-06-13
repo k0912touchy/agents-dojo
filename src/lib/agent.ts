@@ -30,8 +30,13 @@ export interface Agent {
   personaTraits: string[]
   personalKnowledge?: PersonalKnowledge[]
   skillSeeds?: SkillSeed[]
-  totalTokens: number
+  totalTokens: number    // 累積獲得トークン（増えるだけ、クエスト消費で減らさない）
+  spentTokens: number    // クエストで消費したトークン
   sessionTokens: number
+}
+
+export function availableTokens(agent: Agent): number {
+  return Math.max(0, agent.totalTokens - (agent.spentTokens ?? 0))
 }
 
 export type SkillRank = 1 | 2 | 3 | 4 | 5

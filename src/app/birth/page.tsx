@@ -33,6 +33,7 @@ export default function BirthPage() {
       skills: [],
       personaTraits: [],
       totalTokens: 0,
+      spentTokens: 0,
       sessionTokens: 0,
     }
     saveAgent(agent)
