@@ -13,7 +13,7 @@ import {
 } from '@/lib/agent'
 import ParameterBar from '@/components/ParameterBar'
 
-type Phase = 'category' | 'topic' | 'chat' | 'generating' | 'skill-confirm' | 'skill-revealed' | 'born'
+type Phase = 'category' | 'topic' | 'skill-goal' | 'chat' | 'generating' | 'skill-confirm' | 'skill-revealed' | 'born'
 
 interface SkillProposal {
   skillNameOptions: string[]
@@ -26,6 +26,31 @@ interface SkillProposal {
 }
 
 const SESSION_WRAP_THRESHOLD = 7 // user messages before suggesting wrap-up
+
+const SKILL_GOAL_PRESETS: Record<'experience' | 'research', Array<{ icon: string; label: string; detail: string }>> = {
+  experience: [
+    { icon: '⚖️', label: '判断基準を言語化したい', detail: '何を見て決める？の軸をはっきりさせる' },
+    { icon: '🔄', label: 'プロセス・手順をまとめたい', detail: '再現できる動き方を体系化する' },
+    { icon: '💡', label: '暗黙知・直感を言葉にしたい', detail: '「なぜかうまくいく」理由を掘り下げる' },
+    { icon: '⚠️', label: '失敗パターンを整理したい', detail: 'やってはいけないことをまとめる' },
+    { icon: '🎯', label: '成功パターンをまとめたい', detail: 'うまくいった要因を再現できる形に' },
+  ],
+  research: [
+    { icon: '⚖️', label: 'この分野の判断基準を手に入れたい', detail: '自分の用途に合った意思決定の軸を作る' },
+    { icon: '🔄', label: '具体的な手順・方法を学びたい', detail: 'ゼロから動けるプロセスを手に入れる' },
+    { icon: '⚠️', label: '失敗しないポイントを押さえたい', detail: '初心者がはまりやすいミスを避ける' },
+    { icon: '🎯', label: '自分の目的に特化した知識を作りたい', detail: '一般論でなく自分の状況向けにカスタム' },
+    { icon: '🗺️', label: 'まず全体像を把握したい', detail: '構造を理解してから判断軸を深掘りする' },
+  ],
+}
+
+const SKILL_SEGMENTS = [
+  { label: '場面', threshold: 1 },
+  { label: '判断軸', threshold: 2 },
+  { label: '手順', threshold: 3 },
+  { label: 'なぜ', threshold: 5 },
+  { label: '注意', threshold: 7 },
+]
 
 export default function TrainPage() {
   const router = useRouter()
@@ -63,9 +88,11 @@ export default function TrainPage() {
   const [guideAnswer, setGuideAnswer] = useState('')
   const [loadingResearch, setLoadingResearch] = useState(false)
   const [topicType, setTopicType] = useState<'experience' | 'research'>('experience')
+  const [skillGoal, setSkillGoal] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const agentRef = useRef<Agent | null>(null)
+  const pendingBgRef = useRef('')
 
   useEffect(() => {
     let a = loadAgent()
@@ -168,9 +195,8 @@ export default function TrainPage() {
 
   async function handleTopicConfirm() {
     if (!topic.trim() || !agentRef.current || !selectedCategory) return
-    const a = agentRef.current
-    const config = AGENT_TYPES[a.type]
 
+    let fetchedContent = ''
     if (refUrl.trim()) {
       setFetchingUrl(true)
       setFetchError('')
@@ -186,7 +212,8 @@ export default function TrainPage() {
           setFetchingUrl(false)
           return
         }
-        setRefContent(data.content)
+        fetchedContent = data.content
+        setRefContent(fetchedContent)
       } catch {
         setFetchError('URLの取得に失敗しました')
         setFetchingUrl(false)
@@ -195,12 +222,27 @@ export default function TrainPage() {
       setFetchingUrl(false)
     }
 
-    const bg = selectedBackground || refContent
+    const currentRefContent = fetchedContent || refContent
+    const bg = selectedBackground || currentRefContent
+    let finalRefContent = currentRefContent
     if (guideAnswer.trim()) {
-      setRefContent(prev => prev ? `${prev}\n\nユーザーの視点：${guideAnswer}` : `ユーザーの視点：${guideAnswer}`)
+      finalRefContent = currentRefContent
+        ? `${currentRefContent}\n\nユーザーの視点：${guideAnswer}`
+        : `ユーザーの視点：${guideAnswer}`
+      setRefContent(finalRefContent)
     }
+    pendingBgRef.current = bg || finalRefContent
 
-    // Type B (リサーチ型) の opening
+    setPhase('skill-goal')
+  }
+
+  function handleStartChat(goal: string) {
+    if (!agentRef.current || !selectedCategory) return
+    const a = agentRef.current
+    const config = AGENT_TYPES[a.type]
+    const bg = pendingBgRef.current
+    setSkillGoal(goal)
+
     const typeBOpenings: Record<string, string> = {
       先読み型: `「${topic}」ですね。${config.emoji} まずこのスキルが必要な背景を聞かせてください。どんな場面・事業・目的でこの判断能力が必要ですか？そこから一緒にスキルを設計します。`,
       設計型: `「${topic}」を一緒に作っていきます！${config.emoji} まず教えてほしいのですが、このスキルを何のために使いたいですか？目的・場面が分かると、より実践的な内容にできます。`,
@@ -251,6 +293,7 @@ export default function TrainPage() {
           topic,
           refContent: refContent || selectedBackground || undefined,
           topicType,
+          skillGoal: skillGoal || undefined,
         }),
       })
 
@@ -407,6 +450,7 @@ export default function TrainPage() {
       setGuideAnswer('')
       setLoadingResearch(false)
       setTopicType('experience')
+      setSkillGoal('')
     }
   }
 
@@ -805,14 +849,90 @@ export default function TrainPage() {
         </div>
       )}
 
+      {/* Skill Goal Declaration */}
+      {phase === 'skill-goal' && (
+        <div className="flex flex-col flex-1 fade-in-up">
+          <button
+            onClick={() => setPhase('topic')}
+            className="flex items-center gap-1 text-xs mb-6 w-fit"
+            style={{ color: '#64748B' }}
+          >
+            ← 戻る
+          </button>
+
+          {/* Topic reminder */}
+          <div className="rounded-xl px-4 py-3 mb-6" style={{ background: `${config.color}12`, border: `1px solid ${config.color}33` }}>
+            <p className="text-xs mb-0.5" style={{ color: config.color }}>今回のテーマ</p>
+            <p className="font-bold text-sm">{topic}</p>
+          </div>
+
+          <p className="font-bold text-base mb-1">このセッションで何を作る？</p>
+          <p className="text-xs mb-5" style={{ color: '#64748B' }}>ゴールを決めると、会話の着地点がはっきりします</p>
+
+          <div className="flex flex-col gap-2.5 mb-6">
+            {SKILL_GOAL_PRESETS[topicType].map((preset, i) => (
+              <button
+                key={i}
+                onClick={() => handleStartChat(preset.label)}
+                className="w-full text-left px-4 py-4 rounded-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-xl shrink-0 mt-0.5">{preset.icon}</span>
+                  <div>
+                    <p className="font-bold text-sm mb-0.5">{preset.label}</p>
+                    <p className="text-xs" style={{ color: '#64748B' }}>{preset.detail}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => handleStartChat('')}
+            className="text-xs"
+            style={{ color: '#4A5568' }}
+          >
+            ゴール宣言せずにはじめる →
+          </button>
+        </div>
+      )}
+
       {/* Chat */}
       {phase === 'chat' && (
         <>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs px-2 py-1 rounded" style={{ background: config.bgColor, color: config.color }}>
-              {selectedCategory?.emoji} {selectedCategory?.label}
-            </span>
-            <span className="text-xs truncate" style={{ color: '#94A3B8' }}>{topic}</span>
+          {/* Chat header: tags + progress meter */}
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs px-2 py-1 rounded" style={{ background: config.bgColor, color: config.color }}>
+                {selectedCategory?.emoji} {selectedCategory?.label}
+              </span>
+              <span className="text-xs truncate" style={{ color: '#64748B' }}>{topic}</span>
+            </div>
+            {/* Skill template progress */}
+            <div className="flex items-center gap-2">
+              {skillGoal && (
+                <span className="text-xs truncate flex-1 min-w-0" style={{ color: '#94A3B8' }}>
+                  🎯 {skillGoal}
+                </span>
+              )}
+              <div className="flex gap-1.5 ml-auto shrink-0">
+                {SKILL_SEGMENTS.map((seg, i) => {
+                  const filled = userMsgCount >= seg.threshold
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-0.5">
+                      <div
+                        className="w-7 h-1.5 rounded-full transition-all duration-500"
+                        style={{ background: filled ? config.color : 'rgba(255,255,255,0.1)' }}
+                      />
+                      <span className="text-[9px]" style={{ color: filled ? config.color : '#3D4A5C' }}>
+                        {seg.label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Wrap-up nudge */}

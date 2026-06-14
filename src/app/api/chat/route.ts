@@ -9,7 +9,7 @@ const PERSONALITY: Record<AgentType, string> = {
   共鳴型: '共感的で丁寧。「深いですね」「その経験からは〜が見えますね」という口調。',
 }
 
-function buildResearchSystemPrompt(agentType: AgentType, agentName: string, category: string, topic: string, refContent?: string): string {
+function buildResearchSystemPrompt(agentType: AgentType, agentName: string, category: string, topic: string, refContent?: string, skillGoal?: string): string {
   return `あなたは「${agentName}」というAIエージェントです。
 今日のセッションでは、「${topic}」についてユーザーが持っていない知識を一緒に構築する「リサーチパートナー」として話します。
 ユーザーはこの分野の知識がゼロですが、明確な目的・コンテキストを持っています。
@@ -32,7 +32,7 @@ function buildResearchSystemPrompt(agentType: AgentType, agentName: string, cate
 
 ## カテゴリ・テーマ
 カテゴリ：${category}
-テーマ：${topic}${refContent ? `\n\n## ユーザーのコンテキスト・目的\n---\n${refContent}\n---` : ''}
+テーマ：${topic}${refContent ? `\n\n## ユーザーのコンテキスト・目的\n---\n${refContent}\n---` : ''}${skillGoal ? `\n\n## 今回のゴール\nユーザーは「${skillGoal}」を今日のセッションのゴールとして宣言しています。このゴールに向かって会話を設計し、着地させてください。` : ''}
 
 ## 会話スタイル
 ${PERSONALITY[agentType]}
@@ -46,7 +46,7 @@ ${PERSONALITY[agentType]}
 - 「頑張ってください」などの励まし`
 }
 
-function buildSystemPrompt(agentType: AgentType, agentName: string, category: string, topic: string, refContent?: string): string {
+function buildSystemPrompt(agentType: AgentType, agentName: string, category: string, topic: string, refContent?: string, skillGoal?: string): string {
   return `あなたは「${agentName}」というAIエージェントです。
 今日のセッションでは、「${topic}」についてユーザーと一緒に知識を深めていく「共同研究者」として話します。
 
@@ -77,7 +77,7 @@ function buildSystemPrompt(agentType: AgentType, agentName: string, category: st
 
 ## カテゴリ・テーマ
 カテゴリ：${category}
-テーマ：${topic}${refContent ? `\n\n## 事前情報（ユーザーの視点・背景）\n以下を踏まえた上で会話してください。\n---\n${refContent}\n---` : ''}
+テーマ：${topic}${refContent ? `\n\n## 事前情報（ユーザーの視点・背景）\n以下を踏まえた上で会話してください。\n---\n${refContent}\n---` : ''}${skillGoal ? `\n\n## 今回のゴール\nユーザーは「${skillGoal}」を今日のセッションのゴールとして宣言しています。このゴールに向かって会話を進め、5〜7ターン以内に着地点が見えるよう設計してください。` : ''}
 
 ## 会話スタイル
 ${PERSONALITY[agentType]}
@@ -92,7 +92,7 @@ ${PERSONALITY[agentType]}
 }
 
 export async function POST(req: Request) {
-  const { messages, agentType, agentName, category, topic, refContent, topicType } = await req.json()
+  const { messages, agentType, agentName, category, topic, refContent, topicType, skillGoal } = await req.json()
 
   const builder = topicType === 'research' ? buildResearchSystemPrompt : buildSystemPrompt
   const systemPrompt = builder(
@@ -101,6 +101,7 @@ export async function POST(req: Request) {
     category ?? 'その他',
     topic ?? '（テーマ未設定）',
     refContent,
+    skillGoal,
   )
 
   const result = streamText({
