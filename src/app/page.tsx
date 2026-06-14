@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { QUIZ_QUESTIONS, judgeType, AGENT_TYPES, type AgentType } from '@/lib/quiz'
-import { loadAgent, saveAgentToArchive, calcAgentTier, availableTokens, TIER_COLORS, type Agent } from '@/lib/agent'
+import { loadAgent, saveAgentToArchive, calcAgentTier, availableTokens, isAgentBorn, refreshDailyTokens, DAILY_TOKEN_CAP, TIER_COLORS, type Agent } from '@/lib/agent'
 
 type Mode = 'loading' | 'resume' | 'intro' | 'quiz'
 
@@ -17,8 +17,9 @@ export default function HomePage() {
   const [transitioning, setTransitioning] = useState(false)
 
   useEffect(() => {
-    const a = loadAgent()
+    let a = loadAgent()
     if (a) {
+      a = refreshDailyTokens(a)
       setSavedAgent(a)
       setMode('resume')
     } else {
@@ -59,7 +60,8 @@ export default function HomePage() {
   // Returning user: saved agent exists
   if (mode === 'resume' && savedAgent) {
     const config = AGENT_TYPES[savedAgent.type]
-    const progress = Math.min((savedAgent.totalTokens / 5000) * 100, 100)
+    const dailyProgress = Math.min(((savedAgent.dailyTokens ?? 0) / DAILY_TOKEN_CAP) * 100, 100)
+    const isBorn = isAgentBorn(savedAgent)
     const tier = calcAgentTier(savedAgent)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
@@ -109,18 +111,18 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Progress */}
+            {/* Daily progress */}
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span style={{ color: '#64748B' }}>誕生まで</span>
+                <span style={{ color: '#64748B' }}>本日のセッション</span>
                 <span style={{ color: '#FFC300' }}>
-                  {savedAgent.totalTokens >= 5000
-                    ? '誕生済み 🎉'
-                    : `${Math.round(progress)}%`}
+                  {(savedAgent.dailyTokens ?? 0) >= DAILY_TOKEN_CAP
+                    ? '上限到達'
+                    : `${(savedAgent.dailyTokens ?? 0).toLocaleString()} / ${DAILY_TOKEN_CAP.toLocaleString()}`}
                 </span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                <div className="h-full rounded-full" style={{ width: `${progress}%`, background: '#FFC300' }} />
+                <div className="h-full rounded-full" style={{ width: `${dailyProgress}%`, background: '#FFC300' }} />
               </div>
             </div>
 

@@ -8,7 +8,8 @@ import { KNOWLEDGE_TEMPLATES, type KnowledgeTemplate } from '@/lib/templates'
 import {
   loadAgent, saveAgent, calcParamGrowth,
   saveDetectedTrait, PARAM_LABELS, TIER_COLORS, renderStars,
-  BIRTH_THRESHOLD, type Agent, type Skill, type Message, type DetectedTrait, type SkillRank, type PersonalKnowledge,
+  DAILY_TOKEN_CAP, isAgentBorn, refreshDailyTokens,
+  type Agent, type Skill, type Message, type DetectedTrait, type SkillRank, type PersonalKnowledge,
 } from '@/lib/agent'
 import ParameterBar from '@/components/ParameterBar'
 
@@ -66,10 +67,11 @@ export default function TrainPage() {
   const agentRef = useRef<Agent | null>(null)
 
   useEffect(() => {
-    const a = loadAgent()
+    let a = loadAgent()
     if (!a) { router.push('/'); return }
-    // migrate old agents without personaTraits
     if (!a.personaTraits) a.personaTraits = []
+    a = refreshDailyTokens(a)
+    saveAgent(a)
     agentRef.current = a
     setAgent(a)
   }, [router])
@@ -253,14 +255,21 @@ export default function TrainPage() {
 
       const tokens = Math.ceil((userMsg.content.length + assistantContent.length) * 1.3)
       setTokenCount((prev) => prev + tokens)
+      const newDailyTokens = Math.min((a.dailyTokens ?? 0) + tokens, DAILY_TOKEN_CAP)
       const updated: Agent = {
         ...a,
         totalTokens: a.totalTokens + tokens,
         sessionTokens: a.sessionTokens + tokens,
+        dailyTokens: newDailyTokens,
       }
       agentRef.current = updated
       setAgent(updated)
       saveAgent(updated)
+
+      // 1日の上限に達したらセッションを自動終了してスキル生成
+      if (newDailyTokens >= DAILY_TOKEN_CAP) {
+        setTimeout(() => handleEndSession(), 800)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -351,7 +360,8 @@ export default function TrainPage() {
 
   function handleContinue() {
     if (!agentRef.current) return
-    if (agentRef.current.totalTokens >= BIRTH_THRESHOLD) {
+    // 初めてスキルが完成した瞬間だけ born フェーズへ
+    if (agentRef.current.skills.length === 1) {
       setPhase('born')
     } else {
       setPhase('category')
@@ -385,8 +395,8 @@ export default function TrainPage() {
 
   if (!agent) return null
   const config = AGENT_TYPES[agent.type]
-  const progress = Math.min((agent.totalTokens / BIRTH_THRESHOLD) * 100, 100)
-  const isBorn = agent.totalTokens >= BIRTH_THRESHOLD
+  const dailyProgress = Math.min(((agent.dailyTokens ?? 0) / DAILY_TOKEN_CAP) * 100, 100)
+  const isBorn = isAgentBorn(agent)
   const isNearingWrap = userMsgCount >= SESSION_WRAP_THRESHOLD
 
   return (
@@ -409,10 +419,10 @@ export default function TrainPage() {
           </div>
           <div className="flex items-center gap-2 mt-1">
             <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, background: '#FFC300' }} />
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${dailyProgress}%`, background: '#FFC300' }} />
             </div>
             <span className="text-xs shrink-0" style={{ color: '#64748B' }}>
-              {agent.totalTokens.toLocaleString()} / {BIRTH_THRESHOLD.toLocaleString()}
+              本日 {(agent.dailyTokens ?? 0).toLocaleString()} / {DAILY_TOKEN_CAP.toLocaleString()}
             </span>
           </div>
         </div>
@@ -1032,13 +1042,15 @@ export default function TrainPage() {
 
           <div className="rounded-xl p-4 mb-5" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)' }}>
             <div className="flex justify-between text-xs mb-2">
-              <span style={{ color: '#FFC300' }}>誕生まで</span>
+              <span style={{ color: '#FFC300' }}>本日のセッション</span>
               <span style={{ color: '#FFC300' }}>
-                {isBorn ? '達成！🎉' : `残り ${(BIRTH_THRESHOLD - agent.totalTokens).toLocaleString()} tokens`}
+                {(agent.dailyTokens ?? 0) >= DAILY_TOKEN_CAP
+                  ? '上限到達 — 明日また教え込もう'
+                  : `残り ${(DAILY_TOKEN_CAP - (agent.dailyTokens ?? 0)).toLocaleString()} tokens`}
               </span>
             </div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: '#FFC300' }} />
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${dailyProgress}%`, background: '#FFC300' }} />
             </div>
           </div>
 

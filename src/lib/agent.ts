@@ -30,9 +30,11 @@ export interface Agent {
   personaTraits: string[]
   personalKnowledge?: PersonalKnowledge[]
   skillSeeds?: SkillSeed[]
-  totalTokens: number    // 累積獲得トークン（増えるだけ、クエスト消費で減らさない）
-  spentTokens: number    // クエストで消費したトークン
+  totalTokens: number    // 累積獲得トークン（増えるだけ、スキルショップ・クエストの財布）
+  spentTokens: number    // クエスト・スキルショップで消費したトークン
   sessionTokens: number
+  dailyTokens: number    // 今日獲得したトークン（DAILY_TOKEN_CAP上限）
+  dailyDate: string      // 最後のリセット日（YYYY-MM-DD）
 }
 
 export function availableTokens(agent: Agent): number {
@@ -78,8 +80,27 @@ export const PARAM_LABELS: Record<string, string> = {
   creativity: '創造性',
 }
 
-export const BIRTH_THRESHOLD = 5000
+export const DAILY_TOKEN_CAP = 5000        // 1日の獲得上限
+export const BIRTH_THRESHOLD = 5000        // 後方互換のため残す（非推奨）
 export const GRADUATION_THRESHOLD = 35000
+
+export function getTodayDate(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+// 日付が変わっていたらdailyTokensをリセットして返す
+export function refreshDailyTokens(agent: Agent): Agent {
+  const today = getTodayDate()
+  if ((agent.dailyDate ?? '') !== today) {
+    return { ...agent, dailyTokens: 0, dailyDate: today }
+  }
+  return agent
+}
+
+// エージェントが「誕生済み」かどうか（スキル1個以上で誕生）
+export function isAgentBorn(agent: Agent): boolean {
+  return agent.skills.length >= 1
+}
 
 const agentTypeGrowthMap: Record<AgentType, Partial<Record<keyof Agent['params'], number>>> = {
   先読み型: { analysis: 5, expertise: 3 },

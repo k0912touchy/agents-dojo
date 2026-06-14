@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGENT_TYPES, type AgentType } from '@/lib/quiz'
-import { PARAM_LABELS, saveAgent, type Agent } from '@/lib/agent'
+import { PARAM_LABELS, saveAgent, getTodayDate, type Agent } from '@/lib/agent'
 import ParameterBar from '@/components/ParameterBar'
 
 export default function BirthPage() {
@@ -35,6 +35,8 @@ export default function BirthPage() {
       totalTokens: 0,
       spentTokens: 0,
       sessionTokens: 0,
+      dailyTokens: 0,
+      dailyDate: getTodayDate(),
     }
     saveAgent(agent)
     setPhase('born')

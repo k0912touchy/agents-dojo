@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGENT_TYPES } from '@/lib/quiz'
-import { loadAgent, loadDetectedTraits, calcAgentTier, TIER_COLORS, renderStars, BIRTH_THRESHOLD, type Agent, type DetectedTrait, type PersonalKnowledge } from '@/lib/agent'
+import { loadAgent, loadDetectedTraits, calcAgentTier, TIER_COLORS, renderStars, DAILY_TOKEN_CAP, isAgentBorn, type Agent, type DetectedTrait, type PersonalKnowledge } from '@/lib/agent'
 import ParameterBar from '@/components/ParameterBar'
 
 function SkillContent({ content, accentColor }: { content: string; accentColor: string }) {
@@ -52,8 +52,8 @@ export default function AgentPage() {
 
   if (!agent) return null
   const config = AGENT_TYPES[agent.type]
-  const progress = Math.min((agent.totalTokens / BIRTH_THRESHOLD) * 100, 100)
-  const isBorn = agent.totalTokens >= BIRTH_THRESHOLD
+  const dailyProgress = Math.min(((agent.dailyTokens ?? 0) / DAILY_TOKEN_CAP) * 100, 100)
+  const isBorn = isAgentBorn(agent)
   const tier = calcAgentTier(agent)
 
   return (
@@ -86,13 +86,15 @@ export default function AgentPage() {
       {/* Birth progress */}
       <div className="rounded-xl p-4 mb-5" style={{ background: 'rgba(255,195,0,0.08)', border: '1px solid rgba(255,195,0,0.15)' }}>
         <div className="flex justify-between text-xs mb-2">
-          <span style={{ color: '#FFC300' }}>誕生まで</span>
+          <span style={{ color: '#FFC300' }}>本日のセッション</span>
           <span style={{ color: '#FFC300' }}>
-            {isBorn ? '誕生済み 🎉' : `${agent.totalTokens.toLocaleString()} / ${BIRTH_THRESHOLD.toLocaleString()} tokens`}
+            {(agent.dailyTokens ?? 0) >= DAILY_TOKEN_CAP
+              ? '上限到達 — 明日また教え込もう'
+              : `${(agent.dailyTokens ?? 0).toLocaleString()} / ${DAILY_TOKEN_CAP.toLocaleString()} tokens`}
           </span>
         </div>
         <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, background: '#FFC300' }} />
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${dailyProgress}%`, background: '#FFC300' }} />
         </div>
       </div>
 
