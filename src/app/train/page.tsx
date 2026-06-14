@@ -62,6 +62,7 @@ export default function TrainPage() {
   const [guideResearch, setGuideResearch] = useState<{ researchPoints: string[]; confirmQuestion: string } | null>(null)
   const [guideAnswer, setGuideAnswer] = useState('')
   const [loadingResearch, setLoadingResearch] = useState(false)
+  const [topicType, setTopicType] = useState<'experience' | 'research'>('experience')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const agentRef = useRef<Agent | null>(null)
@@ -94,6 +95,7 @@ export default function TrainPage() {
     setGuideResearch(null)
     setGuideAnswer('')
     setLoadingResearch(false)
+    setTopicType('experience')
     setPhase('topic')
   }
 
@@ -197,7 +199,16 @@ export default function TrainPage() {
     if (guideAnswer.trim()) {
       setRefContent(prev => prev ? `${prev}\n\nユーザーの視点：${guideAnswer}` : `ユーザーの視点：${guideAnswer}`)
     }
-    const openings: Record<string, string> = topicOrigin === 'consult' && bg ? {
+
+    // Type B (リサーチ型) の opening
+    const typeBOpenings: Record<string, string> = {
+      先読み型: `「${topic}」ですね。${config.emoji} まずこのスキルが必要な背景を聞かせてください。どんな場面・事業・目的でこの判断能力が必要ですか？そこから一緒にスキルを設計します。`,
+      設計型: `「${topic}」を一緒に作っていきます！${config.emoji} まず教えてほしいのですが、このスキルを何のために使いたいですか？目的・場面が分かると、より実践的な内容にできます。`,
+      突破型: `「${topic}」か！${config.emoji} 知識ゼロからでも全然作れる。まず聞いていい？なんでこのスキルが必要になったの？どんな場面で使いたい？`,
+      共鳴型: `「${topic}」について一緒に学んでいきましょう。${config.emoji} まず教えてください。このスキルが必要になった背景はどんな状況ですか？あなたの文脈に合わせてスキルを作っていきたいので。`,
+    }
+
+    const openings: Record<string, string> = topicType === 'research' ? typeBOpenings : topicOrigin === 'consult' && bg ? {
       先読み型: `「${topic}」ですね。${config.emoji}\n\nまず背景を整理します。\n${bg}\n\nあなたの経験や職場では、これに近い場面はありましたか？どんな小さな話でもOKです。`,
       設計型: `「${topic}」を一緒に体系化していきます！${config.emoji}\n\n${bg}\n\nまずあなたの実際の状況から聞かせてください。これに近いことを経験した場面はありますか？`,
       突破型: `「${topic}」！${config.emoji}\n\n${bg}\n\nで、実際どう？これに近い体験、仕事でも日常でも何かある？どんな小さい話でもOK。`,
@@ -208,7 +219,7 @@ export default function TrainPage() {
       突破型: `「${topic}」！${config.emoji} 具体的な話から入ろう。最近これを使ったシーンを一つ教えて。どんな状況だった？`,
       共鳴型: `「${topic}」について教えてもらえるんですね。${config.emoji} これが特に役に立った・大切だと感じた場面はありますか？具体的なエピソードから聞かせてください。`,
     }
-    setMessages([{ role: 'assistant', content: openings[a.type] ?? `「${topic}」について教えてください！` }])
+    setMessages([{ role: 'assistant', content: openings[a.type] ?? typeBOpenings[a.type] ?? `「${topic}」について教えてください！` }])
     setPhase('chat')
   }
 
@@ -239,6 +250,7 @@ export default function TrainPage() {
           category: selectedCategory.label,
           topic,
           refContent: refContent || selectedBackground || undefined,
+          topicType,
         }),
       })
 
@@ -294,6 +306,7 @@ export default function TrainPage() {
           category: selectedCategory.label,
           topic,
           agentType: agentRef.current.type,
+          topicType,
         }),
       })
       const proposal: SkillProposal = await res.json()
@@ -322,6 +335,9 @@ export default function TrainPage() {
       earnedAt: a.totalTokens,
       rank: (rawRank && rawRank >= 1 && rawRank <= 5) ? rawRank as SkillRank : undefined,
       content: skillProposal.content,
+      sourceType: topicType,
+      phase: 'personal',
+      version: 1,
     }
 
     // 固有知識の抽出・保存
@@ -390,6 +406,7 @@ export default function TrainPage() {
       setGuideResearch(null)
       setGuideAnswer('')
       setLoadingResearch(false)
+      setTopicType('experience')
     }
   }
 
@@ -479,28 +496,43 @@ export default function TrainPage() {
           {/* モード選択 */}
           {topicMode === 'select' && (
             <div className="flex flex-col gap-3 mt-4">
-              {/* 一緒に決める — 推奨 */}
+              {/* Type A：自分の経験・知識を教える */}
               <button
-                onClick={() => setTopicMode('consult')}
+                onClick={() => { setTopicType('experience'); setTopicMode('consult') }}
                 className="w-full text-left p-5 rounded-2xl transition-all hover:scale-[1.01]"
                 style={{ background: `${config.color}12`, border: `1.5px solid ${config.color}55` }}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <p className="font-bold text-base">💬 一緒に考えながら決める</p>
+                  <p className="font-bold text-base">🧠 自分の知識・経験を教える</p>
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${config.color}22`, color: config.color }}>おすすめ</span>
                 </div>
                 <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
-                  知識ゼロでもOK。状況を話すだけで<br />AIがテーマを提案 → 会話スタート
+                  状況を話すだけでテーマ提案 → あなたの<br />暗黙知をスキルカードに結晶化
                 </p>
               </button>
 
-              {/* 自分で決める */}
+              {/* Type B：持っていない知識をスキル化 */}
               <button
-                onClick={() => setTopicMode('free')}
+                onClick={() => { setTopicType('research'); setTopicMode('free') }}
+                className="w-full text-left p-5 rounded-2xl transition-all hover:scale-[1.01]"
+                style={{ background: 'rgba(99,102,241,0.08)', border: '1.5px solid rgba(99,102,241,0.35)' }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold text-base">🔍 持っていないスキルを作る</p>
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.2)', color: '#818CF8' }}>リサーチ型</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+                  知識ゼロでもOK。目的を伝えると<br />AIが調べてあなた向けにスキル化
+                </p>
+              </button>
+
+              {/* クイック入力 */}
+              <button
+                onClick={() => { setTopicType('experience'); setTopicMode('free') }}
                 className="w-full text-left p-4 rounded-xl transition-all hover:opacity-80"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
               >
-                <p className="font-bold text-sm mb-0.5">✏️ テーマを自分で入力する</p>
+                <p className="font-bold text-sm mb-0.5">✏️ テーマを直接入力する</p>
                 <p className="text-xs" style={{ color: '#64748B' }}>教えたいことが決まっている場合</p>
               </button>
             </div>
@@ -680,6 +712,14 @@ export default function TrainPage() {
           {topicMode !== 'consult' && topicMode !== 'guide-confirm' && (
             <>
               <p className="text-sm mb-4" style={{ color: '#64748B' }}>何を教え込みたい？</p>
+
+              {/* Type B バナー */}
+              {topicType === 'research' && (
+                <div className="rounded-xl px-4 py-3 mb-4 text-xs" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                  <p className="font-bold mb-0.5" style={{ color: '#818CF8' }}>🔍 リサーチ型スキル</p>
+                  <p style={{ color: '#94A3B8' }}>AIが調べてあなたの目的に合わせて整理します。目的・使いたい場面も合わせて入力するとより精度が上がります。</p>
+                </div>
+              )}
 
               {/* テンプレートモードバナー */}
               {topicMode === 'template' && selectedTemplate && (

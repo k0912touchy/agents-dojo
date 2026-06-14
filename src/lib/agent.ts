@@ -49,7 +49,10 @@ export interface Skill {
   earnedAt: number
   rank?: SkillRank
   content?: string
-  isPrivate?: boolean  // 外部公開時に除外されるスキル
+  isPrivate?: boolean          // 外部公開時に除外されるスキル
+  sourceType?: 'experience' | 'research'  // 経験ベース or リサーチベース
+  phase?: 'draft' | 'personal' | 'public' // 成長フェーズ
+  version?: number             // 更新回数
 }
 
 export function renderStars(rank: SkillRank): string {

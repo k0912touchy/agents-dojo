@@ -3,11 +3,12 @@ import { generateText } from 'ai'
 import type { Message } from '@/lib/agent'
 
 export async function POST(req: Request) {
-  const { messages, category, topic, agentType } = await req.json() as {
+  const { messages, category, topic, agentType, topicType } = await req.json() as {
     messages: Message[]
     category: string
     topic: string
     agentType: string
+    topicType?: 'experience' | 'research'
   }
 
   const conversation = messages
@@ -16,9 +17,43 @@ export async function POST(req: Request) {
 
   const userMsgCount = messages.filter((m) => m.role === 'user').length
 
+  const isResearch = topicType === 'research'
+
   const { text } = await generateText({
     model: anthropic('claude-haiku-4-5'),
-    prompt: `以下は、ユーザーがAIエージェントに知識・TIPSを教え込んだセッションの会話です。
+    prompt: isResearch
+      ? `以下は、ユーザーがまだ持っていない知識をAIと共同リサーチしてスキル化したセッションの会話です。
+
+カテゴリ：${category}
+テーマ：${topic}
+エージェントタイプ：${agentType}
+タイプ：リサーチ型（ユーザーの目的・コンテキストに最適化した判断フレームワーク）
+
+---
+${messages.map((m) => `${m.role === 'user' ? 'ユーザー' : 'エージェント'}: ${m.content}`).join('\n')}
+---
+
+このセッションを分析して、以下のJSON形式のみで出力してください（説明文不要）：
+
+{
+  "skillNameOptions": [
+    "スキル名案1（5〜12文字・このユーザーの目的に特化した名称）",
+    "スキル名案2（5〜12文字）",
+    "スキル名案3（5〜12文字）"
+  ],
+  "summary": "このスキルで何を判断できるか・何に使えるか（25〜40文字）",
+  "keyPoints": ["ポイント1", "ポイント2", "ポイント3"],
+  "rank": 会話の深さ・ユーザーのコンテキストの具体性・判断基準の精度で判定した整数（1〜4）。リサーチ型は経験型より1段低めに設定,
+  "content": "## 目的・使いどころ\\n[このスキルをいつ・何のために使うか。ユーザーの目的文脈を踏まえて1〜2文]\\n\\n## 判断軸\\n- [判断基準1]\\n- [判断基準2]\\n- [判断基準3]\\n\\n## 判断プロセス\\n- [手順・アクション1]\\n- [手順・アクション2]\\n- [手順・アクション3]\\n\\n## 重要な視点\\n[この分野で見落としやすい・初心者がハマりやすいポイント（1〜2文）]\\n\\n## 要検証\\n[実際の経験・専門家の確認が必要な部分。何を試して確かめると良いか（1文）]",
+  "personaTrait": null,
+  "personalContext": "このスキルを必要とした目的・事業・状況のサマリー（例：「〇〇事業の仕入れ判断を目的とした知識」）。実名・社名は使わず抽象化"
+}
+
+【ルール】
+- リサーチ型スキルなのでcontentの末尾に「要検証」セクションを必ず入れる
+- personaTraitはnullにする（経験から生まれる特性ではないため）
+- rankは1〜4の範囲。会話が浅ければ2、ユーザーコンテキストが具体的なら3、判断軸が精緻なら4`
+      : `以下は、ユーザーがAIエージェントに知識・TIPSを教え込んだセッションの会話です。
 
 カテゴリ：${category}
 テーマ：${topic}

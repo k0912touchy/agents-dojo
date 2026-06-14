@@ -122,6 +122,9 @@ export default function AgentPage() {
                     <div className="flex items-center justify-between mb-1">
                       <p className="font-bold text-sm">{skill.name}</p>
                       <div className="flex items-center gap-2">
+                        {skill.sourceType === 'research' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(99,102,241,0.15)', color: '#818CF8' }}>🔍</span>
+                        )}
                         {skill.isPrivate && (
                           <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(252,129,129,0.12)', color: '#FC8181' }}>🔒</span>
                         )}
