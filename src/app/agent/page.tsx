@@ -164,13 +164,29 @@ export default function AgentPage() {
           <p className="text-xs font-bold mb-3" style={{ color: '#64748B' }}>
             🧬 行動特性 <span style={{ color: '#48BB78' }}>{agent.personaTraits.length}</span>
           </p>
-          <div className="flex flex-col gap-2">
+          {/* Badge row */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {agent.personaTraits.map((label, i) => (
+              <span
+                key={i}
+                className="px-3 py-1.5 rounded-full text-xs font-bold"
+                style={{ background: 'rgba(72,187,120,0.12)', color: '#48BB78', border: '1px solid rgba(72,187,120,0.3)' }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+          {/* Details on tap */}
+          <div className="flex flex-col gap-1.5">
             {agent.personaTraits.map((label, i) => {
               const detail = allTraits.find((t) => t.label === label)
+              if (!detail) return null
               return (
-                <div key={i} className="rounded-xl px-4 py-3" style={{ background: 'rgba(72,187,120,0.06)', border: '1px solid rgba(72,187,120,0.15)' }}>
-                  <p className="text-xs font-bold mb-1" style={{ color: '#48BB78' }}>{label}</p>
-                  {detail && <p className="text-xs" style={{ color: '#64748B' }}>{detail.description}</p>}
+                <div key={i} className="flex gap-2 items-start px-1">
+                  <span className="text-xs shrink-0 mt-0.5" style={{ color: '#48BB78' }}>▸</span>
+                  <p className="text-xs leading-relaxed" style={{ color: '#64748B' }}>
+                    <span className="font-bold" style={{ color: '#48BB78' }}>{label}</span>：{detail.description}
+                  </p>
                 </div>
               )
             })}
