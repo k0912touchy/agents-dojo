@@ -108,33 +108,17 @@ export default function QuestPage() {
     setAgentResponse('')
     setShowRetryInput(false)
 
-    const skillContext = a.skills
-      .map((s) => `【${s.name}】${s.description}`)
-      .join('\n')
-
-    let refContent = `あなたはクエストに挑戦しています。以下のスキルを活かして回答してください。\n${skillContext}\n\nヒント：${q.hint}`
-
-    if (previousAttempts && previousAttempts.length > 0) {
-      refContent += `\n\n## 前回の試行（この問題への別アプローチを試してください）`
-      previousAttempts.forEach((attempt, i) => {
-        refContent += `\n### 試行${i + 1}\n${attempt}`
-      })
-      if (retryConditionText) {
-        refContent += `\n\n## 今回試すアプローチ・変える条件\n${retryConditionText}`
-      }
-    }
-
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/quest/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: q.scenario }],
           agentType: a.type,
           agentName: a.name,
-          category: 'クエスト',
-          topic: q.title,
-          refContent,
+          scenario: q.scenario,
+          skills: a.skills.map((s) => ({ name: s.name, description: s.description, content: s.content })),
+          previousAttempts,
+          retryCondition: retryConditionText,
         }),
       })
 
