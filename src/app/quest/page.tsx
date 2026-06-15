@@ -48,6 +48,10 @@ export default function QuestPage() {
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(1)
   const [quest, setQuest] = useState<QuestData | null>(null)
   const [agentResponse, setAgentResponse] = useState('')
+  const [allAttempts, setAllAttempts] = useState<string[]>([])
+  const [attemptCount, setAttemptCount] = useState(1)
+  const [showRetryInput, setShowRetryInput] = useState(false)
+  const [retryCondition, setRetryCondition] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [feedbackNote, setFeedbackNote] = useState('')
   const [evalResult, setEvalResult] = useState<EvalResult | null>(null)
@@ -95,13 +99,30 @@ export default function QuestPage() {
     }
   }
 
-  async function generateAgentResponse(a: Agent, q: QuestData) {
-    const config = AGENT_TYPES[a.type]
+  async function generateAgentResponse(
+    a: Agent,
+    q: QuestData,
+    previousAttempts?: string[],
+    retryConditionText?: string,
+  ) {
     setAgentResponse('')
+    setShowRetryInput(false)
 
     const skillContext = a.skills
       .map((s) => `【${s.name}】${s.description}`)
       .join('\n')
+
+    let refContent = `あなたはクエストに挑戦しています。以下のスキルを活かして回答してください。\n${skillContext}\n\nヒント：${q.hint}`
+
+    if (previousAttempts && previousAttempts.length > 0) {
+      refContent += `\n\n## 前回の試行（この問題への別アプローチを試してください）`
+      previousAttempts.forEach((attempt, i) => {
+        refContent += `\n### 試行${i + 1}\n${attempt}`
+      })
+      if (retryConditionText) {
+        refContent += `\n\n## 今回試すアプローチ・変える条件\n${retryConditionText}`
+      }
+    }
 
     try {
       const res = await fetch('/api/chat', {
@@ -113,7 +134,7 @@ export default function QuestPage() {
           agentName: a.name,
           category: 'クエスト',
           topic: q.title,
-          refContent: `あなたはクエストに挑戦しています。以下のスキルを活かして回答してください。\n${skillContext}\n\nヒント：${q.hint}`,
+          refContent,
         }),
       })
 
@@ -129,20 +150,32 @@ export default function QuestPage() {
         setAgentResponse(content)
       }
 
-      // トークンを消費（spentTokensを増やすだけ。totalTokensは不変）
-      const updated: Agent = {
-        ...a,
-        spentTokens: (a.spentTokens ?? 0) + q.tokenCost,
+      // 初回のみトークン消費
+      if (!previousAttempts || previousAttempts.length === 0) {
+        const updated: Agent = {
+          ...a,
+          spentTokens: (a.spentTokens ?? 0) + q.tokenCost,
+        }
+        agentRef.current = updated
+        setAgent(updated)
+        saveAgent(updated)
       }
-      agentRef.current = updated
-      setAgent(updated)
-      saveAgent(updated)
 
+      setAllAttempts((prev) => [...prev, content])
       setPhase('feedback')
     } catch {
       setAgentResponse('回答の生成に失敗しました。')
       setPhase('feedback')
     }
+  }
+
+  async function handleRetry() {
+    if (!agentRef.current || !quest) return
+    const nextCount = attemptCount + 1
+    setAttemptCount(nextCount)
+    setRetryCondition('')
+    setPhase('responding')
+    await generateAgentResponse(agentRef.current, quest, allAttempts, retryCondition)
   }
 
   async function handleSubmitFeedback() {
@@ -159,6 +192,7 @@ export default function QuestPage() {
           agentName: a.name,
           scenario: quest.scenario,
           agentResponse,
+          allAttempts,
           userFeedback: { tags: selectedTags, note: feedbackNote || undefined },
           skills: a.skills.map((s) => ({ name: s.name, description: s.description })),
         }),
@@ -332,6 +366,25 @@ export default function QuestPage() {
           {/* Feedback section */}
           {phase === 'feedback' && (
             <div className="flex-1 flex flex-col">
+              {/* Attempt indicator */}
+              {attemptCount > 1 && (
+                <div className="flex gap-1.5 mb-4">
+                  {Array.from({ length: attemptCount }).map((_, i) => (
+                    <span
+                      key={i}
+                      className="text-xs px-2 py-0.5 rounded-full"
+                      style={{
+                        background: i === attemptCount - 1 ? `${config.color}22` : 'rgba(255,255,255,0.04)',
+                        color: i === attemptCount - 1 ? config.color : '#4A5568',
+                        border: `1px solid ${i === attemptCount - 1 ? config.color + '55' : 'rgba(255,255,255,0.08)'}`,
+                      }}
+                    >
+                      試行{i + 1}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <p className="text-xs font-bold mb-3" style={{ color: '#64748B' }}>この回答をどう評価する？</p>
               <div className="flex flex-wrap gap-2 mb-4">
                 {FEEDBACK_TAGS.map((tag) => (
@@ -359,13 +412,58 @@ export default function QuestPage() {
                 className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none mb-4"
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#F0F4FF' }}
               />
+
               <button
                 onClick={handleSubmitFeedback}
-                className="w-full py-4 rounded-xl font-bold text-base transition-all hover:scale-[1.02]"
+                className="w-full py-4 rounded-xl font-bold text-base transition-all hover:scale-[1.02] mb-3"
                 style={{ background: '#FFC300', color: '#0A0F2C' }}
               >
                 結果を見る →
               </button>
+
+              {/* Retry option (max 3 attempts) */}
+              {attemptCount < 3 && (
+                <>
+                  {!showRetryInput ? (
+                    <button
+                      onClick={() => setShowRetryInput(true)}
+                      className="w-full py-3 rounded-xl text-sm transition-all"
+                      style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}
+                    >
+                      🔄 条件を変えて再試行する（あと{3 - attemptCount}回）
+                    </button>
+                  ) : (
+                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <p className="text-xs mb-2" style={{ color: '#94A3B8' }}>どのアプローチ・条件で試し直す？</p>
+                      <textarea
+                        value={retryCondition}
+                        onChange={(e) => setRetryCondition(e.target.value)}
+                        placeholder="例：もっと具体的な数字を使う / 別の視点から攻める / リスクを前面に出す"
+                        rows={2}
+                        autoFocus
+                        className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none mb-3"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#F0F4FF' }}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowRetryInput(false)}
+                          className="flex-1 py-2 rounded-xl text-xs"
+                          style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          onClick={handleRetry}
+                          className="flex-1 py-2 rounded-xl text-sm font-bold transition-all"
+                          style={{ background: config.color, color: '#0A0F2C' }}
+                        >
+                          再試行 →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -485,7 +583,7 @@ export default function QuestPage() {
 
           <div className="flex gap-2 mt-auto">
             <button
-              onClick={() => { setPhase('select'); setQuest(null); setAgentResponse(''); setSelectedTags([]); setFeedbackNote(''); setEvalResult(null) }}
+              onClick={() => { setPhase('select'); setQuest(null); setAgentResponse(''); setAllAttempts([]); setAttemptCount(1); setShowRetryInput(false); setRetryCondition(''); setSelectedTags([]); setFeedbackNote(''); setEvalResult(null) }}
               className="flex-1 py-3 rounded-xl text-sm"
               style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}
             >

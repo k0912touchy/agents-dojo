@@ -2,11 +2,12 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { generateText } from 'ai'
 
 export async function POST(req: Request) {
-  const { agentType, agentName, scenario, agentResponse, userFeedback, skills } = await req.json() as {
+  const { agentType, agentName, scenario, agentResponse, allAttempts, userFeedback, skills } = await req.json() as {
     agentType: string
     agentName: string
     scenario: string
     agentResponse: string
+    allAttempts?: string[]
     userFeedback: { tags: string[]; note?: string }
     skills: { name: string; description: string }[]
   }
@@ -17,6 +18,10 @@ export async function POST(req: Request) {
     userFeedback.note ? `補足：${userFeedback.note}` : '',
   ].filter(Boolean).join(' / ')
 
+  const attemptsSection = allAttempts && allAttempts.length > 1
+    ? `\n## 全試行（${allAttempts.length}回）\n${allAttempts.map((a, i) => `### 試行${i + 1}\n${a}`).join('\n\n')}`
+    : `\n## エージェントの回答\n${agentResponse}`
+
   const { text } = await generateText({
     model: anthropic('claude-haiku-4-5'),
     prompt: `AIエージェント「${agentName}」（${agentType}）がクエストに挑戦しました。
@@ -24,9 +29,7 @@ export async function POST(req: Request) {
 
 ## クエストシナリオ
 ${scenario}
-
-## エージェントの回答
-${agentResponse}
+${attemptsSection}
 
 ## ユーザーのフィードバック
 ${feedbackText || '（フィードバックなし）'}

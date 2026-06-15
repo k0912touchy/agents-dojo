@@ -294,6 +294,7 @@ export default function TrainPage() {
           refContent: refContent || selectedBackground || undefined,
           topicType,
           skillGoal: skillGoal || undefined,
+          turnCount: userMsgCount + 1,
         }),
       })
 
@@ -333,7 +334,12 @@ export default function TrainPage() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+    // On touch devices, Enter inserts newline; send via button only
+    const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
+    if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {
+      e.preventDefault()
+      sendMessage()
+    }
   }
 
   async function handleEndSession() {
