@@ -1,6 +1,40 @@
 @import "tailwindcss";
 
+/* ============================================
+   DOJO Design Tokens
+   UIを作り直す時はここだけ変える
+   ============================================ */
 :root {
+  /* Background */
+  --bg-base: #0A0F2C;
+  --bg-surface: rgba(255, 255, 255, 0.04);
+  --bg-surface-hover: rgba(255, 255, 255, 0.07);
+
+  /* Border */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+
+  /* Text */
+  --text-primary: #F0F4FF;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --text-faint: #4A5568;
+
+  /* Accent — change this to retheme */
+  --accent: #FFC300;
+  --accent-dim: rgba(255, 195, 0, 0.12);
+  --accent-border: rgba(255, 195, 0, 0.30);
+  --accent-on: #0A0F2C;
+
+  /* Perspective type */
+  --mirror-color: #60A5FA;
+  --mirror-bg: rgba(96, 165, 250, 0.10);
+  --complement-color: #34D399;
+  --complement-bg: rgba(52, 211, 153, 0.10);
+  --contrarian-color: #F87171;
+  --contrarian-bg: rgba(248, 113, 113, 0.10);
+
+  /* Legacy aliases */
   --navy: #0A0F2C;
   --navy-dark: #070C1F;
   --yellow: #FFC300;
@@ -10,8 +44,8 @@
 }
 
 @theme inline {
-  --color-background: var(--navy);
-  --color-foreground: #F0F4FF;
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

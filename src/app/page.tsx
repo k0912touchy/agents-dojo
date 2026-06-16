@@ -2,259 +2,125 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { QUIZ_QUESTIONS, judgeType, AGENT_TYPES, type AgentType } from '@/lib/quiz'
-import { loadAgent, saveAgentToArchive, calcAgentTier, availableTokens, isAgentBorn, refreshDailyTokens, DAILY_TOKEN_CAP, TIER_COLORS, type Agent } from '@/lib/agent'
-
-type Mode = 'loading' | 'resume' | 'intro' | 'quiz'
+import { loadAgent } from '@/lib/storage'
+import { PERSPECTIVE_META, type Agent } from '@/lib/dojo'
 
 export default function HomePage() {
   const router = useRouter()
-  const [mode, setMode] = useState<Mode>('loading')
-  const [savedAgent, setSavedAgent] = useState<Agent | null>(null)
-  const [step, setStep] = useState(1)
-  const [answers, setAnswers] = useState<AgentType[]>([])
-  const [selected, setSelected] = useState<AgentType | null>(null)
-  const [transitioning, setTransitioning] = useState(false)
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let a = loadAgent()
-    if (a) {
-      a = refreshDailyTokens(a)
-      setSavedAgent(a)
-      setMode('resume')
-    } else {
-      setMode('intro')
-    }
+    setAgent(loadAgent())
+    setLoading(false)
   }, [])
 
-  function handleSelect(type: AgentType) {
-    if (transitioning) return
-    setSelected(type)
-    setTransitioning(true)
-    setTimeout(() => {
-      const newAnswers = [...answers, type]
-      if (step < 3) {
-        setAnswers(newAnswers)
-        setSelected(null)
-        setTransitioning(false)
-        setStep(step + 1)
-      } else {
-        const agentType = judgeType(newAnswers)
-        localStorage.setItem('dojo_quiz_answers', JSON.stringify(newAnswers))
-        localStorage.setItem('dojo_agent_type', agentType)
-        router.push('/birth')
-      }
-    }, 500)
-  }
+  if (loading) return null
 
-  function startNew() {
-    const current = loadAgent()
-    if (current) saveAgentToArchive(current)
-    localStorage.removeItem('dojo_agent')
-    setSavedAgent(null)
-    setMode('intro')
-  }
-
-  if (mode === 'loading') return null
-
-  // Returning user: saved agent exists
-  if (mode === 'resume' && savedAgent) {
-    const config = AGENT_TYPES[savedAgent.type]
-    const dailyProgress = Math.min(((savedAgent.dailyTokens ?? 0) / DAILY_TOKEN_CAP) * 100, 100)
-    const isBorn = isAgentBorn(savedAgent)
-    const tier = calcAgentTier(savedAgent)
+  // Returning user
+  if (agent) {
+    const pm = PERSPECTIVE_META[agent.persona.perspectiveType]
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full fade-in-up">
-          <p className="text-xs tracking-widest mb-6 text-center" style={{ color: '#FFC300' }}>おかえり</p>
+          <p className="text-xs tracking-widest text-center mb-8" style={{ color: 'var(--accent)' }}>
+            DOJO
+          </p>
 
           {/* Agent card */}
           <div
-            className="rounded-2xl p-6 mb-6 cursor-pointer transition-all hover:scale-[1.01]"
-            style={{ background: config.bgColor, border: `1px solid ${config.color}` }}
+            className="rounded-2xl p-5 mb-5 cursor-pointer transition-all hover:scale-[1.01]"
+            style={{ background: pm.bg, border: `1px solid ${pm.color}44` }}
             onClick={() => router.push('/agent')}
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="text-4xl">{config.emoji}</div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold">{savedAgent.name}</h2>
-                  <span
-                    className="text-sm font-black px-2 py-0.5 rounded"
-                    style={{ background: `${TIER_COLORS[tier]}22`, color: TIER_COLORS[tier], border: `1px solid ${TIER_COLORS[tier]}55` }}
-                  >
-                    {tier}
-                  </span>
-                </div>
-                <p className="text-sm" style={{ color: config.color }}>{savedAgent.type}</p>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">{pm.icon}</div>
+              <div>
+                <h2 className="text-xl font-bold">{agent.name}</h2>
+                <span className="text-xs" style={{ color: pm.color }}>{pm.label}</span>
               </div>
             </div>
-
-            <div className="flex gap-4 mb-4 text-sm">
-              <div>
-                <p className="text-xs mb-0.5" style={{ color: '#64748B' }}>スキル</p>
-                <p className="font-bold">{savedAgent.skills.length} 個</p>
-              </div>
-              <div>
-                <p className="text-xs mb-0.5" style={{ color: '#64748B' }}>行動特性</p>
-                <p className="font-bold">{(savedAgent.personaTraits ?? []).length} 件</p>
-              </div>
-              <div>
-                <p className="text-xs mb-0.5" style={{ color: '#64748B' }}>累計tokens</p>
-                <p className="font-bold">{savedAgent.totalTokens.toLocaleString()}</p>
-              </div>
-              {(savedAgent.spentTokens ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs mb-0.5" style={{ color: '#64748B' }}>使用可能</p>
-                  <p className="font-bold" style={{ color: '#FFC300' }}>{availableTokens(savedAgent).toLocaleString()}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Daily progress */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span style={{ color: '#64748B' }}>本日のセッション</span>
-                <span style={{ color: '#FFC300' }}>
-                  {(savedAgent.dailyTokens ?? 0) >= DAILY_TOKEN_CAP
-                    ? '上限到達'
-                    : `${(savedAgent.dailyTokens ?? 0).toLocaleString()} / ${DAILY_TOKEN_CAP.toLocaleString()}`}
-                </span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                <div className="h-full rounded-full" style={{ width: `${dailyProgress}%`, background: '#FFC300' }} />
-              </div>
-            </div>
-
-            <p className="text-xs mt-3" style={{ color: '#4A5568' }}>タップして詳細を見る →</p>
-          </div>
-
-          <button
-            onClick={() => router.push('/train')}
-            className="w-full py-4 rounded-xl font-bold text-base transition-all hover:scale-[1.02] mb-3"
-            style={{ background: '#FFC300', color: '#0A0F2C' }}
-          >
-            教え込みを続ける →
-          </button>
-          {savedAgent.skills.length > 0 && (
-            <button
-              onClick={() => router.push('/quest')}
-              className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] mb-3"
-              style={{ background: 'rgba(255,195,0,0.1)', border: '1px solid rgba(255,195,0,0.3)', color: '#FFC300' }}
-            >
-              ⚔️ クエストに挑む
-            </button>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push('/library')}
-              className="flex-1 py-3 rounded-xl text-sm transition-all hover:opacity-70"
-              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
-            >
-              📚 ライブラリ
-            </button>
-            <button
-              onClick={startNew}
-              className="flex-1 py-3 rounded-xl text-sm transition-all hover:opacity-70"
-              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}
-            >
-              ＋ 新規作成
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Intro screen
-  if (mode === 'intro') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10">
-        <div className="max-w-md w-full fade-in-up">
-          {/* Hero */}
-          <div className="text-center mb-10">
-            <div className="text-5xl mb-5">⚔️</div>
-            <h1 className="text-3xl font-bold mb-2 tracking-tight">Agents DOJO</h1>
-            <p className="text-sm px-2 py-1 rounded-full inline-block mb-4" style={{ background: 'rgba(255,195,0,0.12)', color: '#FFC300' }}>β版 デモ</p>
-            <p className="text-base leading-relaxed" style={{ color: '#94A3B8' }}>
-              あなたの知識を教えるたびに賢くなる、<br />
-              <span style={{ color: '#F0F4FF' }}>あなただけのAIエージェント</span>を育てる。
+            <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--text-secondary)' }}>
+              {agent.persona.description.slice(0, 80)}...
             </p>
-          </div>
-
-          {/* How it works */}
-          <div className="rounded-2xl p-5 mb-6" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-xs font-bold mb-4 tracking-widest" style={{ color: '#64748B' }}>HOW IT WORKS</p>
-            <div className="flex flex-col gap-4">
-              {[
-                { step: '01', emoji: '💬', title: '会話で教え込む', desc: '自分の知識・経験・判断軸をエージェントに話しかけるだけ' },
-                { step: '02', emoji: '🃏', title: 'スキルカードに結晶化', desc: 'セッションがスキルとして記録される。何をどれだけ持っているか一目でわかる' },
-                { step: '03', emoji: '🚀', title: 'エージェントが進化する', desc: '教えるほどパラメーターが育ち、あなたの分身として機能するようになる' },
-              ].map(({ step, emoji, title, desc }) => (
-                <div key={step} className="flex gap-4 items-start">
-                  <div className="text-xs font-black shrink-0 w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,195,0,0.1)', color: '#FFC300' }}>{step}</div>
-                  <div>
-                    <p className="text-sm font-bold mb-0.5">{emoji} {title}</p>
-                    <p className="text-xs leading-relaxed" style={{ color: '#64748B' }}>{desc}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="flex gap-4 text-sm">
+              <div>
+                <p className="text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>知識</p>
+                <p className="font-bold" style={{ color: pm.color }}>{agent.knowledge.length}</p>
+              </div>
+              <div>
+                <p className="text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>経験</p>
+                <p className="font-bold" style={{ color: pm.color }}>{agent.experiences.length}</p>
+              </div>
             </div>
           </div>
 
-          {/* CTA */}
-          <button
-            onClick={() => setMode('quiz')}
-            className="w-full py-4 rounded-xl text-base font-bold tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] mb-3"
-            style={{ background: '#FFC300', color: '#0A0F2C' }}
-          >
-            思考タイプ診断スタート →
-          </button>
-          <p className="text-center text-xs" style={{ color: '#4A5568' }}>3問・約1分 · アカウント登録不要</p>
+          {/* Actions */}
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => router.push('/knowledge/new')}
+              className="w-full py-4 rounded-xl font-bold transition-all hover:scale-[1.02]"
+              style={{ background: 'var(--accent)', color: 'var(--accent-on)' }}>
+              📚 知識を与える
+            </button>
+            <button
+              onClick={() => router.push('/experience/new')}
+              className="w-full py-4 rounded-xl font-bold transition-all hover:scale-[1.02]"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+              ⚡ 経験を積ませる
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Quiz
-  const question = QUIZ_QUESTIONS[step - 1]
+  // New user
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4">
-      <div className="max-w-lg w-full fade-in-up">
-        <div className="flex gap-2 mb-10">
-          {[1, 2, 3].map((n) => (
-            <div key={n} className="h-1 flex-1 rounded-full transition-all duration-300"
-              style={{ background: n <= step ? '#FFC300' : 'rgba(255,255,255,0.1)' }} />
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10">
+      <div className="max-w-md w-full fade-in-up">
+        <div className="text-center mb-10">
+          <p className="text-xs tracking-[0.3em] mb-5" style={{ color: 'var(--accent)' }}>DOJO</p>
+          <h1 className="text-3xl font-bold mb-4 leading-tight">
+            人格・知識・経験で<br />AIエージェントを設計する
+          </h1>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            普通のAIに足りないのは「経験由来の判断」。<br />
+            DOJOはそれを作る場所。
+          </p>
+        </div>
+
+        {/* 3 axes */}
+        <div className="rounded-2xl p-5 mb-8"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+          {[
+            { icon: '🧠', title: '人格', desc: '思考スタイル・視点タイプを診断で設計する' },
+            { icon: '📚', title: '知識', desc: 'AIに調べさせるか、自分で書いて与える' },
+            { icon: '⚡', title: '経験', desc: 'シナリオを経験させ、判断パターンを形成する' },
+          ].map(({ icon, title, desc }) => (
+            <div key={title} className="flex gap-4 items-start py-3"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <span className="text-xl shrink-0 mt-0.5">{icon}</span>
+              <div>
+                <p className="text-sm font-bold mb-0.5">{title}</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{desc}</p>
+              </div>
+            </div>
           ))}
         </div>
-        <p className="text-xs mb-4 tracking-widest" style={{ color: '#FFC300' }}>Q{step} / 3</p>
-        <h2 className="text-xl font-bold leading-relaxed mb-8 whitespace-pre-line">{question.question}</h2>
-        <div className="flex flex-col gap-3">
-          {question.options.map((opt) => {
-            const typeConfig = AGENT_TYPES[opt.type]
-            const isSelected = selected === opt.type
-            return (
-              <button
-                key={opt.key}
-                onClick={() => handleSelect(opt.type)}
-                disabled={transitioning}
-                className="w-full text-left px-5 py-4 rounded-xl border transition-all hover:scale-[1.01]"
-                style={{
-                  background: isSelected ? typeConfig.bgColor : 'rgba(255,255,255,0.04)',
-                  borderColor: isSelected ? typeConfig.color : 'rgba(255,255,255,0.1)',
-                  color: '#F0F4FF',
-                }}
-              >
-                <span className="text-xs font-bold mr-3 px-2 py-0.5 rounded"
-                  style={{ background: isSelected ? typeConfig.color : 'rgba(255,255,255,0.1)', color: isSelected ? '#0A0F2C' : '#94A3B8' }}>
-                  {opt.key}
-                </span>
-                {opt.text}
-              </button>
-            )
-          })}
-        </div>
+
+        <button
+          onClick={() => router.push('/create')}
+          className="w-full py-4 rounded-xl font-bold text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
+          style={{ background: 'var(--accent)', color: 'var(--accent-on)' }}>
+          エージェントを設計する →
+        </button>
+        <p className="text-center text-xs mt-3" style={{ color: 'var(--text-faint)' }}>
+          {QUIZ_QUESTIONS_COUNT}問・約2分 · 登録不要
+        </p>
       </div>
     </div>
   )
 }
+
+const QUIZ_QUESTIONS_COUNT = 4
