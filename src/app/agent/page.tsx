@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGENT_TYPES } from '@/lib/quiz'
-import { loadAgent, loadDetectedTraits, calcAgentTier, TIER_COLORS, renderStars, DAILY_TOKEN_CAP, isAgentBorn, type Agent, type DetectedTrait, type PersonalKnowledge } from '@/lib/agent'
+import { loadAgent, saveAgent, loadDetectedTraits, calcAgentTier, TIER_COLORS, renderStars, DAILY_TOKEN_CAP, isAgentBorn, type Agent, type DetectedTrait, type PersonalKnowledge } from '@/lib/agent'
 import ParameterBar from '@/components/ParameterBar'
 
 function SkillContent({ content, accentColor }: { content: string; accentColor: string }) {
@@ -46,8 +46,15 @@ export default function AgentPage() {
     const a = loadAgent()
     if (!a) { router.push('/'); return }
     if (!a.personaTraits) a.personaTraits = []
+    const detected = loadDetectedTraits()
+    // dojo_detected_traits にあってagent.personaTraitsにないものをマージ
+    const missing = detected.filter((t) => !a.personaTraits.includes(t.label))
+    if (missing.length > 0) {
+      a.personaTraits = [...a.personaTraits, ...missing.map((t) => t.label)]
+      saveAgent(a)
+    }
     setAgent(a)
-    setAllTraits(loadDetectedTraits())
+    setAllTraits(detected)
   }, [router])
 
   if (!agent) return null

@@ -102,12 +102,12 @@ ${conversation}
     return Response.json(json)
   } catch {
     return Response.json({
-      skillNameOptions: [topic.slice(0, 12), `${topic.slice(0, 8)}の技`, `${category}の視点`],
+      skillNameOptions: [topic.slice(0, 7), `${topic.slice(0, 5)}の型`, `${category}眼`],
       summary: `${category}分野の知識をインプット`,
       keyPoints: ['セッションで学んだ知識を習得'],
       rank: 2,
       content: `## トリガー・使い所\n${category}分野のシーンで活用できる知識です。\n\n## 判断軸\n- ${topic}に関する判断基準\n\n## プロセス\n- セッションで学んだアプローチを適用する\n\n## メンタルモデル\n${topic}への理解と実践知識。\n\n## 落とし穴・注意点\n状況に応じて柔軟に適用すること。`,
-      personaTrait: null,
+      personaTrait: { label: '実践思考型', description: 'まず行動して学ぶ・試しながら最適化していく思考スタイル' },
       personalContext: null,
     })
   }
